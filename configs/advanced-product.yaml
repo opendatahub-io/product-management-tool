@@ -1,0 +1,253 @@
+# ==============================================================================
+# PRODUCT ONBOARDING CONFIGURATION - EXAMPLE & TEMPLATE
+# ==============================================================================
+# This file serves as both an example and template for onboarding new products
+# to the Konflux platform. Copy this file and modify the values for your product.
+#
+# USAGE:
+#   python3 hack/new_product.py --config data/product-onboarding/your-product.yaml --mode both
+#
+# OUTPUT LOCATIONS:
+#   KRD Resources: konflux-release-data/tenants-config/cluster/{cluster}/tenants/{tenant}/{app}/{branch}/
+#   Pipelinerun Files: {gitlab_repo_path}/{org}/{repo}/.tekton/
+#
+# TEMPLATES USED:
+#   KRD: templates/KRD/*.j2 → Application, Component, ImageRepository, ReleasePlan, ReleasePlanAdmission
+#   Pipelinerun: templates/pipelinerun/unified.yaml.j2 → CI/CD automation
+# ==============================================================================
+
+definitions:
+  - # ===========================================================================
+    # APPLICATION CONFIGURATION
+    # ===========================================================================
+    
+    # REQUIRED: Application name (no branch suffix - added automatically)
+    # Used in: KRD application.yaml.j2 for Application resource name
+    # Used in: Directory structure as {app_name}-{branch} (e.g., "my-product-rhoai-2.23")
+    # Pattern: lowercase, no special chars except hyphens
+    application: my-product
+    
+    # REQUIRED: Konflux tenant name
+    # Used in: KRD output directory structure (tenants/{tenant}/)
+    # Used in: Resource organization and access control
+    # Example: "ai-tenant", "rhoai-tenant"
+    tenant: ai-tenant
+    
+    # REQUIRED: Target branch name
+    # Used in: All templates for branch-aware resource naming
+    # Used in: Pipelinerun CEL expressions for branch targeting
+    # Used in: Component and release plan suffixes (dots converted to dashes)
+    # Examples: "main", "rhoai-2.23", "stable-v1.0"
+    branch: rhoai-2.23
+    
+    # ===========================================================================
+    # COMPONENTS CONFIGURATION
+    # ===========================================================================
+    components:
+      - # REQUIRED: Component name (no branch suffix - added automatically)
+        # Used in: KRD component.yaml.j2 for Component resource name
+        # Used in: Directory structure and pipelinerun filenames
+        # Final name: {name}-{branch} (e.g., "my-service-rhoai-2-23")
+        name: my-service
+        
+        # REQUIRED: Build context directory in the repository
+        # Used in: Pipelinerun templates for Docker build context
+        # Usually "." for root directory or "subdirectory/" for nested builds
+        context: .
+        
+        # REQUIRED: Dockerfile path relative to context
+        # Used in: Pipelinerun templates for container build instructions
+        # Used in: CEL expressions for triggering builds on Dockerfile changes
+        dockerfile: Containerfile
+        
+        # REQUIRED: GitLab repository URL
+        # Used in: KRD component.yaml.j2 for source repository reference
+        # Used in: Pipelinerun annotations for repo metadata
+        # Pattern: https://gitlab.com/{org}/{repo} or nested paths
+        url: https://gitlab.com/redhat/my-org/my-service
+        
+        # REQUIRED: Container registry destination
+        # Used in: KRD imagerepository.yaml.j2 for image storage configuration
+        # Pattern: quay.io/{org}/{repo} (no tag - managed by Konflux)
+        repository: quay.io/my-org/my-service
+        
+        # ===========================================================================
+        # PIPELINERUN CONFIGURATION (can have multiple entries)
+        # ===========================================================================
+        pipelinerun:
+          - # REQUIRED: Build arguments file path
+            # Used in: Pipelinerun templates for build configuration
+            # Used in: CEL expressions to trigger rebuilds when file changes
+            # Path relative to repository root
+            build_args_file: build-args/default.conf
+            
+            # REQUIRED: Pipeline type to use
+            # Used in: Pipelinerun templates to specify which pipeline to execute
+            # Common values: "full-container", "docker-build", "custom-pipeline"
+            pipeline: full-container
+            
+            # OPTIONAL: Build variant for multi-variant builds
+            # Used in: Pipelinerun templates for variant-specific path monitoring
+            # Used in: CEL expressions to watch variant-specific directories
+            # When specified: monitors context/{variant}/ paths
+            # When omitted: only monitors standard paths
+            variant: gpu
+            
+            # OPTIONAL: Target build platforms for multi-architecture builds
+            # Used in: Pipelinerun templates for platform-specific builds
+            # Default: Uses pipeline defaults if not specified
+            build_platforms:
+              - linux/x86_64
+              - linux/arm64
+            
+            # REQUIRED: Additional build secret for private registries
+            # Used in: Pipelinerun templates for registry authentication
+            # References a Kubernetes secret name in the build namespace
+            additional_build_secret: my-private-registry-auth
+            
+            # OPTIONAL: Skip quality gate checks
+            # Used in: Pipelinerun templates to bypass security/quality scans
+            # Default: false (recommended to keep quality gates enabled)
+            skip-checks: false
+            
+            # OPTIONAL: Pipeline execution timeout settings
+            # Used in: Pipelinerun templates for execution time limits
+            # Helps prevent stuck builds from consuming resources
+            timeouts:
+              pipeline: "2h0m0s"     # Total pipeline timeout
+              tasks: "1h30m0s"       # Individual task timeout
+    
+    # ===========================================================================
+    # RELEASE PLAN CONFIGURATION
+    # ===========================================================================
+    release_plan:
+      - # REQUIRED: Release plan base name (no branch suffix - added automatically)
+        # Used in: KRD releaseplan.yaml.j2 for ReleasePlan resource name
+        # Final name: {name}-{branch} (e.g., "my-product-stage-rhoai-2-23")
+        # Must have corresponding release_plan_admission entry
+        name: my-product-stage
+        
+        # REQUIRED: Grace period before release execution (days)
+        # Used in: KRD releaseplan.yaml.j2 for release timing control
+        # Allows time for manual intervention before automatic release
+        grace_period: 30
+        
+        # OPTIONAL: Enable automatic release triggers
+        # Used in: KRD releaseplan.yaml.j2 for release automation
+        # When true: releases trigger automatically on successful builds
+        # When false: requires manual release approval
+        # Default: false
+        autorelease: true
+    
+    # ===========================================================================
+    # RELEASE PLAN ADMISSION CONFIGURATION  
+    # ===========================================================================
+    release_plan_admission:
+      - # REQUIRED: Must match corresponding release_plan name
+        # Used in: KRD releaseplanadmission.yaml.j2 for admission control
+        # Links admission policy to specific release plan
+        name: my-product-stage
+        
+        # REQUIRED: Release policy name
+        # Used in: KRD releaseplanadmission.yaml.j2 for approval workflows
+        # References a ReleasePlanAdmissionPolicy resource
+        # Common values: "registry-quay-stage", "registry-quay-prod"
+        policy: registry-quay-stage
+        
+        # OPTIONAL: Single component release mode
+        # Used in: KRD releaseplanadmission.yaml.j2 for release bundling
+        # When true: each component releases independently
+        # When false: all components release together as a bundle
+        # Default: false
+        single_component_mode: true
+        
+        # REQUIRED: Image tagging strategy
+        # Used in: KRD releaseplanadmission.yaml.j2 for image version management
+        # Supports Go template syntax with variables: timestamp, revision, etc.
+        tags:
+          - "rhoai-2.23"                    # Static branch tag
+          - "rhoai-2.23-{{ timestamp }}"    # Timestamped tag for tracking
+          - "latest-rhoai-2.23"             # Latest tag for branch
+        
+        # REQUIRED: Product display name for metadata
+        # Used in: KRD releaseplanadmission.yaml.j2 for product identification
+        # Used in: Release notifications and dashboards
+        product_name: "My Product Suite"
+        
+        # REQUIRED: Product version for this release
+        # Used in: KRD releaseplanadmission.yaml.j2 for version tracking
+        # Used in: Release metadata and compliance reporting
+        product_version: "2.23"
+        
+        # REQUIRED: Product ID numbers for compliance
+        # Used in: KRD releaseplanadmission.yaml.j2 for product tracking
+        # Array format allows multiple product IDs if needed
+        product_id: [ 12345 ]
+        
+        # REQUIRED: Release intention/environment
+        # Used in: KRD releaseplanadmission.yaml.j2 for environment targeting
+        # Common values: "staging", "production", "testing", "development"
+        intention: staging
+
+# ==============================================================================
+# ADDITIONAL EXAMPLES AND PATTERNS
+# ==============================================================================
+
+# Multiple Components Example:
+# definitions:
+#   - application: multi-component-app
+#     tenant: ai-tenant  
+#     branch: main
+#     components:
+#       - name: frontend
+#         context: frontend/
+#         dockerfile: Dockerfile
+#         url: https://gitlab.com/my-org/my-app
+#         repository: quay.io/my-org/frontend
+#         pipelinerun:
+#           - build_args_file: frontend/build-args.conf
+#             pipeline: full-container
+#       - name: backend
+#         context: backend/
+#         dockerfile: Dockerfile  
+#         url: https://gitlab.com/my-org/my-app
+#         repository: quay.io/my-org/backend
+#         pipelinerun:
+#           - build_args_file: backend/build-args.conf
+#             pipeline: full-container
+#             variant: api
+#     release_plan:
+#       - name: multi-component-stage
+#         autorelease: false
+#     release_plan_admission:
+#       - name: multi-component-stage
+#         policy: registry-quay-stage
+#         single_component_mode: false  # Bundle all components together
+#         tags: ["main", "main-{{ timestamp }}"]
+#         product_name: "Multi-Component Application"
+#         product_version: "1.0"
+#         product_id: [ 67890 ]
+#         intention: staging
+
+# Production Release Example:
+# definitions:
+#   - application: production-app
+#     tenant: prod-tenant
+#     branch: stable-v2.0
+#     # ... components config ...
+#     release_plan:
+#       - name: production-app-prod
+#         grace_period: 60        # Longer grace period for production
+#         autorelease: false      # Manual approval required for production
+#     release_plan_admission:
+#       - name: production-app-prod
+#         policy: registry-quay-prod
+#         single_component_mode: true
+#         tags:
+#           - "v2.0"
+#           - "v2.0.{{ timestamp }}"
+#           - "stable"
+#         product_name: "Production Application"
+#         product_version: "2.0.0"
+#         product_id: [ 11111 ]
+#         intention: production

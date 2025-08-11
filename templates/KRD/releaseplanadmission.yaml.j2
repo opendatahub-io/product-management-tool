@@ -1,0 +1,48 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlanAdmission
+metadata:
+  name: [[ release_plan_admission_name ]]
+  namespace: rhtap-releng-tenant
+  labels:
+    release.appstudio.openshift.io/block-releases: 'false'
+    pp.engineering.redhat.com/business-unit: ai
+spec:
+  applications:
+    - [[ application_name ]]
+  policy: [[ policy_name ]]
+  data:
+    singleComponentMode: [[ single_component_mode ]]
+    mapping:
+      components:
+{%- for component in components %}
+        - name: [[ component.name ]]
+          repository: [[ component.repository ]]
+{%- endfor %}
+      defaults:
+        pushSourceContainer: true
+        tags:
+{%- for tag in tags %}
+          - "[[ tag ]]"
+{%- endfor %}
+    releaseNotes:
+      product_name: [[ product_name ]]
+      product_version: "[[ product_version ]]"
+      product_id: [[ product_id | list ]]
+    intention: [[ intention ]]
+  origin: [[ tenant_name ]]
+  pipeline:
+    pipelineRef:
+      resolver: git
+      params:
+        - name: url
+          value: "https://github.com/konflux-ci/release-service-catalog.git"
+        - name: revision
+          value: production
+        - name: pathInRepo
+          value: "pipelines/managed/push-to-external-registry/push-to-external-registry.yaml"
+    serviceAccountName: release-registry-rhelai
+    timeouts:
+      pipeline: "4h0m0s"
+      tasks: 4h0m0s
+

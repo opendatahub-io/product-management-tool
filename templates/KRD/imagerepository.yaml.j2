@@ -1,0 +1,21 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ImageRepository
+metadata:
+  annotations:
+    image-controller.appstudio.redhat.com/update-component-image: true
+  labels:
+    appstudio.redhat.com/application: [[ application_name ]]
+    appstudio.redhat.com/component: [[ component_name ]]
+  name: [[ component_name ]]
+  namespace: [[ tenant_name ]]
+spec:
+  image:
+    name: [[ tenant_name ]]/[[ application_name ]]/[[ component_name ]]
+    visibility: private
+  notifications:
+    - config:
+        url: https://bombino.api.redhat.com/v1/sbom/quay/push
+      event: repo_push
+      method: webhook
+      title: SBOM-event-to-Bombino

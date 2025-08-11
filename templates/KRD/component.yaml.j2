@@ -1,0 +1,20 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+    git-provider: gitlab
+    mintmaker.appstudio.redhat.com/disabled: true
+  name: [[ component_name ]]
+spec:
+  application: [[ application_name ]]
+  componentName: [[ component_name ]]
+  secret: pipelines-as-code-secret
+  skipGitOpsResourceGeneration: true
+  source:
+    git:
+      context: "[[ component_context ]]"
+      dockerfileUrl: [[ component_dockerfile ]]
+      revision: [[ component_revision ]]
+      url: '[[ component_url ]]'
