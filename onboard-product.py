@@ -465,6 +465,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 release_plan_autorelease=str(rp.get("autorelease", False)).lower(),
                 release_plan_grace_period=rp["grace_period"],
                 release_plan_admission_name=rpa_name,
+                tenant_name=tenant,
             )
             rp_filename = f"{rp_name}.yaml"
             write_with_newline(os.path.join(releaseplans_dir, rp_filename), rp_content)
@@ -510,6 +511,8 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 intention=rpa["intention"],
                 tenant_name=tenant,
                 components=updated_components,
+                service_account_name=rpa["service_account"],
+                pipeline_path=rpa["pipeline_path"],
             )
             rpa_filename = f"{rpa_name}.yaml"
             rpa_filepath = os.path.join(rpa_base_path, rpa_filename)

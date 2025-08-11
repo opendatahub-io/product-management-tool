@@ -66,10 +66,15 @@ definitions:
         # Pattern: https://gitlab.com/{org}/{repo} or nested paths
         url: https://gitlab.com/redhat/my-org/my-service
         
-        # REQUIRED: Container registry destination
-        # Used in: KRD imagerepository.yaml.j2 for image storage configuration
-        # Pattern: quay.io/{org}/{repo} (no tag - managed by Konflux)
-        repository: quay.io/my-org/my-service
+        # REQUIRED: Stage registry destination  
+        # Used in: KRD releaseplanadmission.yaml.j2 when RPA name contains "stage"
+        # Pattern: quay.io/{org}/{repo} 
+        stage_repository: quay.io/my-org/my-service
+        
+        # REQUIRED: Production registry destination
+        # Used in: KRD releaseplanadmission.yaml.j2 when RPA name contains "prod"  
+        # Pattern: quay.io/{prod-org}/{repo} (often different org for production)
+        prod_repository: quay.io/my-org-prod/my-service
         
         # OPTIONAL: Local repository path override
         # Used in: Pipelinerun generation when team members have different repo structures
@@ -166,6 +171,18 @@ definitions:
         # Default: false
         single_component_mode: true
         
+        # REQUIRED: Service account for pipeline execution
+        # Used in: KRD releaseplanadmission.yaml.j2 for pipeline authentication
+        # Pattern: "release-registry-{product-name}" or specific service account name
+        # Must have appropriate registry push permissions
+        service_account: release-registry-my-product
+        
+        # REQUIRED: Pipeline path in release-service-catalog repository
+        # Used in: KRD releaseplanadmission.yaml.j2 for pipeline reference
+        # Common paths: "pipelines/managed/push-to-external-registry/push-to-external-registry.yaml" (stage)
+        #               "pipelines/managed/rh-advisories/rh-advisories.yaml" (prod)
+        pipeline_path: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
+        
         # REQUIRED: Image tagging strategy
         # Used in: KRD releaseplanadmission.yaml.j2 for image version management
         # Supports Go template syntax with variables: timestamp, revision, etc.
@@ -208,7 +225,8 @@ definitions:
 #         context: frontend/
 #         dockerfile: Dockerfile
 #         url: https://gitlab.com/my-org/my-app
-#         repository: quay.io/my-org/frontend
+#         stage_repository: quay.io/my-org/frontend
+#         prod_repository: quay.io/my-org-prod/frontend
 #         pipelinerun:
 #           - build_args_file: frontend/build-args.conf
 #             pipeline: full-container
@@ -216,7 +234,8 @@ definitions:
 #         context: backend/
 #         dockerfile: Dockerfile  
 #         url: https://gitlab.com/my-org/my-app
-#         repository: quay.io/my-org/backend
+#         stage_repository: quay.io/my-org/backend
+#         prod_repository: quay.io/my-org-prod/backend
 #         pipelinerun:
 #           - build_args_file: backend/build-args.conf
 #             pipeline: full-container
@@ -228,6 +247,8 @@ definitions:
 #       - name: multi-component-stage
 #         policy: registry-quay-stage
 #         single_component_mode: false  # Bundle all components together
+#         service_account: release-registry-multi-component
+#         pipeline_path: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
 #         tags: ["main", "main-{{ timestamp }}"]
 #         product_name: "Multi-Component Application"
 #         product_version: "1.0"
@@ -248,6 +269,8 @@ definitions:
 #       - name: production-app-prod
 #         policy: registry-quay-prod
 #         single_component_mode: true
+#         service_account: release-registry-production-app
+#         pipeline_path: pipelines/managed/rh-advisories/rh-advisories.yaml
 #         tags:
 #           - "v2.0"
 #           - "v2.0.{{ timestamp }}"

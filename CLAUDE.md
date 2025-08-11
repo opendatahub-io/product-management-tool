@@ -8,13 +8,25 @@ This is a Python-based tool for onboarding products to the Konflux platform. It 
 
 ## Development Commands
 
+### Setup with uv
+```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync dependencies and create virtual environment
+uv sync
+
+# Install in development mode
+uv pip install -e .
+```
+
 ### Code Quality
 ```bash
 # Format code
-ruff format .
+uv run ruff format .
 
 # Lint code  
-ruff check .
+uv run ruff check .
 
 # Type checking
 # No mypy configured - ask user if needed
@@ -23,13 +35,13 @@ ruff check .
 ### Running the Tool
 ```bash
 # Generate both KRD and pipelinerun resources
-python3 onboard-product.py --config configs/llama-stack.yaml
+uv run python onboard-product.py --config configs/llama-stack.yaml
 
 # Generate only KRD resources
-python3 onboard-product.py --config configs/basic-product.yaml --mode krd
+uv run python onboard-product.py --config configs/basic-product.yaml --mode krd
 
 # Generate only pipelinerun resources
-python3 onboard-product.py --config configs/basic-product.yaml --mode pipelinerun
+uv run python onboard-product.py --config configs/basic-product.yaml --mode pipelinerun
 ```
 
 ## Architecture Notes
@@ -76,3 +88,24 @@ Pipelinerun resources as:
 ## Configuration Files
 - Product configs in `configs/` directory
 - Examples: basic-product.yaml, advanced-product.yaml, llama-stack.yaml
+
+### Repository Configuration
+- Components require two repository fields:
+  - `stage_repository`: Used in ReleasePlanAdmission when RPA name contains "stage"
+  - `prod_repository`: Used in ReleasePlanAdmission when RPA name contains "prod" (default)
+- ImageRepository uses constructed path: `{tenant}/{application}/{component}`
+- Template automatically selects appropriate repository based on RPA name pattern
+
+### Service Account Configuration
+- Each ReleasePlanAdmission requires a `service_account` field
+- Used for pipeline authentication and registry push permissions
+- Common pattern: `release-registry-{product-name}` (e.g., "release-registry-llama-stack")
+- Must exist in the target cluster with appropriate RBAC permissions
+
+### Pipeline Path Configuration
+- Each ReleasePlanAdmission requires a `pipeline_path` field
+- Specifies the path to the release pipeline in the konflux-ci/release-service-catalog repository
+- Common paths:
+  - Stage: `pipelines/managed/push-to-external-registry/push-to-external-registry.yaml`
+  - Production: `pipelines/managed/rh-advisories/rh-advisories.yaml`
+- Path is relative to the release-service-catalog repository root

@@ -11,7 +11,8 @@ definitions:
         context: .                       # REQUIRED - Build context directory, used in pipelinerun
         dockerfile: Containerfile        # REQUIRED - Dockerfile path, used in pipelinerun and CEL expressions
         url: https://gitlab.com/redhat/my-org/my-service  # REQUIRED - Source repo URL, used in Component
-        repository: quay.io/my-org/my-service  # REQUIRED - Container registry destination, used in ImageRepository
+        stage_repository: quay.io/my-org/my-service  # REQUIRED - Stage registry destination, used in ReleasePlanAdmission  
+        prod_repository: quay.io/my-org-prod/my-service  # REQUIRED - Prod registry destination, used in ReleasePlanAdmission
         local_repo_path: /path/to/local/repo  # OPTIONAL - Override repo path for .tekton files
         
         pipelinerun:
@@ -35,6 +36,8 @@ definitions:
       - name: my-product-stage           # REQUIRED - Must match release_plan name, used in RPA
         policy: registry-quay-stage      # REQUIRED - Release policy, used in RPA
         single_component_mode: true      # OPTIONAL - Individual vs bundled releases, used in RPA (default: false)
+        service_account: release-registry-my-product  # REQUIRED - Service account for pipeline execution, used in RPA
+        pipeline_path: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml  # REQUIRED - Pipeline path in release-service-catalog
         tags:                            # REQUIRED - Image tagging strategy, used in RPA
           - "rhoai-2.23"
           - "rhoai-2.23-{{ timestamp }}"

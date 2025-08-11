@@ -14,7 +14,7 @@ metadata:
 {%- if pipelinerun_type == "pull" %}
 {%- if variant %}
       event == "pull_request" && target_branch == "[[ branch ]]" && (
-          ".tekton/[[ base_component_name ]]-pull-request.yaml".pathChanged() ||
+          ".tekton/[[ base_component_name ]]-on-pull-request.yaml".pathChanged() ||
           "[[ build_args_file ]]".pathChanged() ||
           "ci".pathChanged() ||
           "[[ component_dockerfile ]]".pathChanged() ||
