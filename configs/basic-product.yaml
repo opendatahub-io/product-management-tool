@@ -12,6 +12,7 @@ definitions:
         dockerfile: Containerfile        # REQUIRED - Dockerfile path, used in pipelinerun and CEL expressions
         url: https://gitlab.com/redhat/my-org/my-service  # REQUIRED - Source repo URL, used in Component
         repository: quay.io/my-org/my-service  # REQUIRED - Container registry destination, used in ImageRepository
+        local_repo_path: /path/to/local/repo  # OPTIONAL - Override repo path for .tekton files
         
         pipelinerun:
           - build_args_file: build-args/default.conf  # REQUIRED - Build config file, used in pipelinerun

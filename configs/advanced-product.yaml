@@ -71,6 +71,11 @@ definitions:
         # Pattern: quay.io/{org}/{repo} (no tag - managed by Konflux)
         repository: quay.io/my-org/my-service
         
+        # OPTIONAL: Local repository path override
+        # Used in: Pipelinerun generation when team members have different repo structures
+        # When specified, bypasses GitLab URL parsing for .tekton file placement
+        # local_repo_path: /path/to/local/repo
+        
         # ===========================================================================
         # PIPELINERUN CONFIGURATION (can have multiple entries)
         # ===========================================================================

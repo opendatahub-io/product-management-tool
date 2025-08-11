@@ -95,6 +95,7 @@ definitions:
         dockerfile: Containerfile        # Dockerfile path
         url: https://gitlab.com/...       # Repository URL
         repository: quay.io/...          # Container registry
+        local_repo_path: /path/to/repo   # OPTIONAL - Override repo path for .tekton files
         
         pipelinerun:
           - build_args_file: build-args/default.conf    # Build config
@@ -123,6 +124,7 @@ definitions:
 - `skip-checks` - Bypass quality gates (default: false)
 - `timeouts` - Pipeline execution limits
 - `single_component_mode` - Individual vs bundled releases (default: false)
+- `local_repo_path` - Override GitLab repository path for .tekton file generation
 
 ## Templates
 
