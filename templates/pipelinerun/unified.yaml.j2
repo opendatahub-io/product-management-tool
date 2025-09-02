@@ -53,7 +53,7 @@ spec:
   - name: dockerfile
     value: [[ component_dockerfile ]]
   - name: path-context
-    value: ./context/
+    value: [[ path_context ]]
   - name: build-args-file
     value: [[ build_args_file ]]
 {%- if build_platforms %}
@@ -70,9 +70,9 @@ spec:
     value: "true"
 {%- endif %}
   - name: snyk-project-name
-    value: ai-red-hat-inference-server
+    value: [[ snyk_project_name ]]
   - name: snyk-org
-    value: 98e4f46e-334c-414b-b444-43361f404b2f
+    value: [[ snyk_org ]]
   - name: add-capabilities
     value: ""
   pipelineRef:

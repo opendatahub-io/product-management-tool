@@ -50,6 +50,7 @@ uv run python onboard-product.py --config configs/basic-product.yaml --mode pipe
 - Uses Jinja2 with custom delimiters `[[` and `]]` to avoid YAML conflicts
 - KRD templates in `templates/KRD/`: application.yaml.j2, component.yaml.j2, imagerepository.yaml.j2, releaseplan.yaml.j2, releaseplanadmission.yaml.j2
 - Pipelinerun templates in `templates/pipelinerun/`: unified.yaml.j2
+- Pipelinerun supports configurable parameters: `path_context`, `snyk_project_name`, `snyk_org`
 
 ### Branch-Aware Naming
 - Main branch: Uses base names (e.g., "llama-stack")
@@ -109,3 +110,11 @@ Pipelinerun resources as:
   - Stage: `pipelines/managed/push-to-external-registry/push-to-external-registry.yaml`
   - Production: `pipelines/managed/rh-advisories/rh-advisories.yaml`
 - Path is relative to the release-service-catalog repository root
+
+### Pipelinerun Configuration Options
+- Each pipelinerun entry supports optional configuration fields:
+  - `path_context`: Build context directory (default: `"./context/"`)
+  - `snyk_project_name`: Snyk project name for security scanning (default: `"ai-red-hat-inference-server"`)
+  - `snyk_org`: Snyk organization ID (default: `"98e4f46e-334c-414b-b444-43361f404b2f"`)
+- All paths are relative to the component repository root
+- Useful for mono-repo setups and project-specific security scanning

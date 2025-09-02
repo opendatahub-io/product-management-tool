@@ -1,0 +1,38 @@
+definitions:
+  - application: bootc-test
+    tenant: rhel-ai-tenant
+    branch: main
+    components:
+      - name: bootc-test
+        context: .
+        dockerfile: Containerfile
+        url: https://gitlab.com/redhat/rhel-ai/containers/bootc-test
+        stage_repository: registry.stage.redhat.io/rhelai1/bootc-test-rhel9
+        pipelinerun:
+          - build_args_file: argfile.conf
+            pipeline: full-container
+            build_platforms:             # OPTIONAL - Target architectures, used in pipelinerun
+              - linux-d160-m2xlarge/amd64
+            additional_build_secret: global-pull-secret
+            skip-checks: false           # OPTIONAL - Bypass quality gates, used in pipelinerun (default: false)
+            timeouts:                    # OPTIONAL - Execution time limits, used in pipelinerun
+              pipeline: "2h0m0s"
+            path_context: "."
+            snyk_project_name: ai-red-hat-enterprise-linux-ai
+            snyk_org: 01db29d0-f8e7-4709-9725-442d48ddfba6
+    release_plan:
+      - name: bootc-test-stage
+        grace_period: 30                 # REQUIRED - Release delay in days, used in ReleasePlan
+        autorelease: true                # OPTIONAL - Enable automatic releases, used in ReleasePlan (default: false)
+    release_plan_admission:
+      - name: bootc-test-stage           # REQUIRED - Must match release_plan name, used in RPA
+        policy: registry-rhel-ai-containers-stage
+        service_account: release-registry-staging
+        pipeline_path: "pipelines/managed/rh-advisories/rh-advisories.yaml"
+        tags:                            # REQUIRED - Image tagging strategy, used in RPA
+          - "latest"
+          - "test-{{ timestamp }}"
+        product_name: "Red Hat Enterprise Linux AI"
+        product_version: "1.5"          # REQUIRED - Product version, used in RPA metadata
+        product_id: [ 932 ]            # REQUIRED - Product ID for compliance, used in RPA
+        intention: staging               # REQUIRED - Target environment, used in RPA

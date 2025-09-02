@@ -19,6 +19,9 @@ definitions:
           - build_args_file: build-args/default.conf  # REQUIRED - Build config file, used in pipelinerun
             pipeline: full-container     # REQUIRED - Pipeline type, used in pipelinerun spec
             variant: gpu                 # OPTIONAL - Build variant, enables variant-specific path monitoring
+            path_context: ./context/     # OPTIONAL - Build context path, used in pipelinerun (default: "./context/")
+            snyk_project_name: my-product-name  # OPTIONAL - Snyk project name for security scanning (default: "ai-red-hat-inference-server")
+            snyk_org: 98e4f46e-334c-414b-b444-43361f404b2f  # OPTIONAL - Snyk organization ID (default: "98e4f46e-334c-414b-b444-43361f404b2f")
             build_platforms:             # OPTIONAL - Target architectures, used in pipelinerun
               - linux/x86_64
               - linux/arm64

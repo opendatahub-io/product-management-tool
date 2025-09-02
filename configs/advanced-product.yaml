@@ -103,6 +103,22 @@ definitions:
             # When omitted: only monitors standard paths
             variant: gpu
             
+            # OPTIONAL: Build context path
+            # Used in: Pipelinerun templates for specifying build context directory
+            # Default: "./context/" if not specified
+            # Path relative to repository root where build context is located
+            path_context: ./context/
+            
+            # OPTIONAL: Snyk project name for security scanning
+            # Used in: Pipelinerun templates for Snyk vulnerability scans
+            # Default: "ai-red-hat-inference-server" if not specified
+            snyk_project_name: my-product-name
+            
+            # OPTIONAL: Snyk organization ID for security scanning
+            # Used in: Pipelinerun templates for Snyk vulnerability scans
+            # Default: "98e4f46e-334c-414b-b444-43361f404b2f" if not specified
+            snyk_org: 98e4f46e-334c-414b-b444-43361f404b2f
+            
             # OPTIONAL: Target build platforms for multi-architecture builds
             # Used in: Pipelinerun templates for platform-specific builds
             # Default: Uses pipeline defaults if not specified
@@ -230,6 +246,8 @@ definitions:
 #         pipelinerun:
 #           - build_args_file: frontend/build-args.conf
 #             pipeline: full-container
+#             path_context: ./frontend/
+#             snyk_project_name: my-app-frontend
 #       - name: backend
 #         context: backend/
 #         dockerfile: Dockerfile  
@@ -240,6 +258,8 @@ definitions:
 #           - build_args_file: backend/build-args.conf
 #             pipeline: full-container
 #             variant: api
+#             path_context: ./backend/
+#             snyk_project_name: my-app-backend
 #     release_plan:
 #       - name: multi-component-stage
 #         autorelease: false

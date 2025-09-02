@@ -308,6 +308,9 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                 variant = pipelinerun_config.get("variant", "")
                 skip_checks = pipelinerun_config.get("skip-checks", False)
                 timeouts = pipelinerun_config.get("timeouts", {})
+                path_context = pipelinerun_config.get("path_context", "./context/")
+                snyk_project_name = pipelinerun_config.get("snyk_project_name", "ai-red-hat-inference-server")
+                snyk_org = pipelinerun_config.get("snyk_org", "98e4f46e-334c-414b-b444-43361f404b2f")
 
                 for pr_type in ["pull", "push"]:
                     pr_content = unified_template.render(
@@ -326,6 +329,9 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                         variant=variant,
                         skip_checks=skip_checks,
                         timeouts=timeouts,
+                        path_context=path_context,
+                        snyk_project_name=snyk_project_name,
+                        snyk_org=snyk_org,
                     )
 
                     pr_filename = f"{base_component_name}-on-{pr_type}{'-request' if pr_type == 'pull' else ''}.yaml"
