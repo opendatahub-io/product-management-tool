@@ -49,8 +49,11 @@ uv run python onboard-product.py --config configs/basic-product.yaml --mode pipe
 ### Template System
 - Uses Jinja2 with custom delimiters `[[` and `]]` to avoid YAML conflicts
 - KRD templates in `templates/KRD/`: application.yaml.j2, component.yaml.j2, imagerepository.yaml.j2, releaseplan.yaml.j2, releaseplanadmission.yaml.j2
-- Pipelinerun templates in `templates/pipelinerun/`: unified.yaml.j2
-- Pipelinerun supports configurable parameters: `path_context`, `snyk_project_name`, `snyk_org`
+- Pipelinerun templates in `templates/pipelinerun/`:
+  - `full-container.yaml.j2` - Standard container builds (pathInRepo: pipelines/full-container.yaml)
+  - `disk-image.yaml.j2` - Disk image builds (pathInRepo: pipelines/disk-image.yaml)
+- Template selection based on `pipeline` field in pipelinerun configuration
+- Pipelinerun supports configurable parameters: `path_context`, `snyk_project_name`, `snyk_org`, `build_platforms`
 
 ### Branch-Aware Naming
 - Main branch: Uses base names (e.g., "llama-stack")
@@ -92,10 +95,22 @@ Pipelinerun resources as:
 
 ### Repository Configuration
 - Components require two repository fields:
-  - `stage_repository`: Used in ReleasePlanAdmission when RPA name contains "stage"
-  - `prod_repository`: Used in ReleasePlanAdmission when RPA name contains "prod" (default)
+  - `stage_repository`: Used in ReleasePlanAdmission when RPA name contains "stage" (for full-container)
+  - `prod_repository`: Used in ReleasePlanAdmission when RPA name contains "prod" (for full-container)
 - ImageRepository uses constructed path: `{tenant}/{application}/{component}`
 - Template automatically selects appropriate repository based on RPA name pattern
+
+### RPA Configuration by Pipeline Type
+- **ReleasePlanAdmission template selection** based on component pipeline types:
+  - All components in an application must use the same pipeline type
+  - `full-container`: Standard container release with repository mappings
+  - `disk-image`: Disk image release with CDN staging and content gateway configuration
+- **Disk-Image Specific Requirements**:
+  - Components must include `rpa_values` section with required fields
+  - Required fields: `destination`, `version`, `filename`, `source`, `productName`, `productCode`, `productVersionName`, `filePrefix`
+  - Optional field: `contentType` (defaults to "disk-image")
+  - RPA includes `cdn: env` section (stage/prod based on RPA name)
+  - No `defaults` section or repository mappings
 
 ### Service Account Configuration
 - Each ReleasePlanAdmission requires a `service_account` field
@@ -112,9 +127,16 @@ Pipelinerun resources as:
 - Path is relative to the release-service-catalog repository root
 
 ### Pipelinerun Configuration Options
-- Each pipelinerun entry supports optional configuration fields:
+- **Pipeline Type Selection** (required `pipeline` field):
+  - `"full-container"`: Standard container builds with build args, variants, skip-checks
+  - `"disk-image"`: Disk image builds with hardcoded image-type, config-toml, bib-file
+- **Shared Optional Parameters** (both pipeline types):
   - `path_context`: Build context directory (default: `"./context/"`)
   - `snyk_project_name`: Snyk project name for security scanning (default: `"ai-red-hat-inference-server"`)
   - `snyk_org`: Snyk organization ID (default: `"98e4f46e-334c-414b-b444-43361f404b2f"`)
+  - `build_platforms`: Target architectures for multi-platform builds
+  - `timeouts`: Pipeline execution time limits
+- **Full-Container Specific Parameters**:
+  - `build_args_file`, `additional_build_secret`, `variant`, `skip-checks`
+- **Disk-Image Specific**: Uses hardcoded values for `image-type: iso`, `config-toml: config/config-iso.toml`, `bib-file: bib.yaml`
 - All paths are relative to the component repository root
-- Useful for mono-repo setups and project-specific security scanning

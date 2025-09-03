@@ -92,8 +92,10 @@ definitions:
             build_args_file: build-args/default.conf
             
             # REQUIRED: Pipeline type to use
-            # Used in: Pipelinerun templates to specify which pipeline to execute
-            # Common values: "full-container", "docker-build", "custom-pipeline"
+            # Used in: Template selection for pipelinerun generation
+            # Supported values: "full-container", "disk-image"
+            # - "full-container": Standard container builds using pipelines/full-container.yaml
+            # - "disk-image": Disk image builds using pipelines/disk-image.yaml
             pipeline: full-container
             
             # OPTIONAL: Build variant for multi-variant builds
@@ -142,6 +144,38 @@ definitions:
             timeouts:
               pipeline: "2h0m0s"     # Total pipeline timeout
               tasks: "1h30m0s"       # Individual task timeout
+
+# ===========================================================================
+# DISK IMAGE EXAMPLE (Alternative to full-container)
+# ===========================================================================
+# Example disk-image component for bootc/ostree-based builds
+#       - name: my-disk-image
+#         context: .
+#         dockerfile: Containerfile.disk
+#         url: https://gitlab.com/redhat/my-org/disk-images
+#         stage_repository: quay.io/my-org/my-disk-image
+#         prod_repository: quay.io/my-org-prod/my-disk-image
+#         pipelinerun:
+#           - pipeline: disk-image
+#             path_context: .
+#             build_platforms:
+#               - linux-root/amd64
+#             snyk_project_name: my-disk-image-project
+#             snyk_org: 98e4f46e-334c-414b-b444-43361f404b2f
+#             timeouts:
+#               finally: "1h0m0s"
+#               pipeline: "6h0m0s"
+#               tasks: "4h0m0s"
+#         rpa_values:  # REQUIRED for disk-image components
+#           destination: rhelai-1_DOT_5-for-rhel-9-x86_64-isos
+#           version: "1.5.3"
+#           filename: "rhel-ai-disk-1.5.3-[[ release_timestamp ]]-x86_64-boot.iso.gz"
+#           source: "install.iso.gz"
+#           productName: "Binary_RL_Red Hat Enterprise Linux AI"
+#           productCode: "RHELAI"
+#           productVersionName: "1.5.3-staging"
+#           filePrefix: "rhel-ai-disk-1.5.3"
+#           contentType: "disk-image"  # OPTIONAL - defaults to "disk-image"
     
     # ===========================================================================
     # RELEASE PLAN CONFIGURATION

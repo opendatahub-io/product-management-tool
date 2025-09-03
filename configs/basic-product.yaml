@@ -14,10 +14,20 @@ definitions:
         stage_repository: quay.io/my-org/my-service  # REQUIRED - Stage registry destination, used in ReleasePlanAdmission  
         prod_repository: quay.io/my-org-prod/my-service  # REQUIRED - Prod registry destination, used in ReleasePlanAdmission
         local_repo_path: /path/to/local/repo  # OPTIONAL - Override repo path for .tekton files
+        # rpa_values:  # REQUIRED ONLY for disk-image pipeline components
+        #   destination: "example-destination"
+        #   version: "1.0.0"
+        #   filename: "example-{{ release_timestamp }}-x86_64-boot.iso.gz"
+        #   source: "install.iso.gz"
+        #   productName: "Example Product"
+        #   productCode: "EXAMPLE"
+        #   productVersionName: "1.0.0-staging"
+        #   filePrefix: "example-1.0.0"
+        #   contentType: "disk-image"  # Optional - defaults to "disk-image"
         
         pipelinerun:
           - build_args_file: build-args/default.conf  # REQUIRED - Build config file, used in pipelinerun
-            pipeline: full-container     # REQUIRED - Pipeline type, used in pipelinerun spec
+            pipeline: full-container     # REQUIRED - Pipeline type ("full-container" or "disk-image")
             variant: gpu                 # OPTIONAL - Build variant, enables variant-specific path monitoring
             path_context: ./context/     # OPTIONAL - Build context path, used in pipelinerun (default: "./context/")
             snyk_project_name: my-product-name  # OPTIONAL - Snyk project name for security scanning (default: "ai-red-hat-inference-server")

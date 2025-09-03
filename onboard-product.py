@@ -275,8 +275,6 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
     """
     env = create_jinja_env(template_dir)
 
-    unified_template = env.get_template("unified.yaml.j2")
-
     for definition in data.get("definitions", []):
         tenant = definition["tenant"]
 
@@ -301,38 +299,58 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
             ensure_dirs(tekton_dir)
 
             for pipelinerun_config in component.get("pipelinerun", []):
-                build_args_file = pipelinerun_config["build_args_file"]
                 pipeline = pipelinerun_config["pipeline"]
+                
+                # Extract common parameters
                 build_platforms = pipelinerun_config.get("build_platforms", [])
-                additional_build_secret = pipelinerun_config["additional_build_secret"]
-                variant = pipelinerun_config.get("variant", "")
-                skip_checks = pipelinerun_config.get("skip-checks", False)
                 timeouts = pipelinerun_config.get("timeouts", {})
                 path_context = pipelinerun_config.get("path_context", "./context/")
                 snyk_project_name = pipelinerun_config.get("snyk_project_name", "ai-red-hat-inference-server")
                 snyk_org = pipelinerun_config.get("snyk_org", "98e4f46e-334c-414b-b444-43361f404b2f")
 
+                # Select template based on pipeline type
+                if pipeline == "disk-image":
+                    template_name = "disk-image.yaml.j2"
+                elif pipeline == "full-container":
+                    template_name = "full-container.yaml.j2"
+                    # Extract full-container specific parameters
+                    build_args_file = pipelinerun_config["build_args_file"]
+                    additional_build_secret = pipelinerun_config["additional_build_secret"]
+                    variant = pipelinerun_config.get("variant", "")
+                    skip_checks = pipelinerun_config.get("skip-checks", False)
+                else:
+                    raise ValueError(f"Unknown pipeline type '{pipeline}' for component '{component_name}'. Supported types: 'full-container', 'disk-image'")
+
+                pipeline_template = env.get_template(template_name)
+
                 for pr_type in ["pull", "push"]:
-                    pr_content = unified_template.render(
-                        application_name=versioned_app_name,
-                        component_name=component_name,
-                        base_component_name=base_component_name,
-                        component_url=component_url,
-                        component_dockerfile=component.get("dockerfile", "Containerfile"),
-                        tenant_name=tenant,
-                        pipelinerun_type=pr_type,
-                        build_args_file=build_args_file,
-                        build_platforms=build_platforms,
-                        pipelinerun_pipeline=pipeline,
-                        additional_build_secret=additional_build_secret,
-                        branch=branch,
-                        variant=variant,
-                        skip_checks=skip_checks,
-                        timeouts=timeouts,
-                        path_context=path_context,
-                        snyk_project_name=snyk_project_name,
-                        snyk_org=snyk_org,
-                    )
+                    # Prepare template parameters based on pipeline type
+                    template_params = {
+                        "application_name": versioned_app_name,
+                        "component_name": component_name,
+                        "base_component_name": base_component_name,
+                        "component_url": component_url,
+                        "component_dockerfile": component.get("dockerfile", "Containerfile"),
+                        "tenant_name": tenant,
+                        "pipelinerun_type": pr_type,
+                        "branch": branch,
+                        "timeouts": timeouts,
+                        "path_context": path_context,
+                        "snyk_project_name": snyk_project_name,
+                        "snyk_org": snyk_org,
+                        "build_platforms": build_platforms,
+                    }
+
+                    # Add parameters specific to full-container pipeline
+                    if pipeline == "full-container":
+                        template_params.update({
+                            "build_args_file": build_args_file,
+                            "additional_build_secret": additional_build_secret,
+                            "variant": variant,
+                            "skip_checks": skip_checks,
+                        })
+
+                    pr_content = pipeline_template.render(**template_params)
 
                     pr_filename = f"{base_component_name}-on-{pr_type}{'-request' if pr_type == 'pull' else ''}.yaml"
                     pr_filepath = os.path.join(tekton_dir, pr_filename)
@@ -497,12 +515,42 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
             else:
                 rpa_name = f"{base_rpa_name}-{normalized_branch}"
 
+            # Detect pipeline types for RPA template selection
+            pipeline_types = set()
+            for component in definition.get("components", []):
+                for pipelinerun_config in component.get("pipelinerun", []):
+                    pipeline_types.add(pipelinerun_config["pipeline"])
+            
+            # Validate that all components use the same pipeline type
+            if len(pipeline_types) > 1:
+                raise ValueError(f"Mixed pipeline types found in application '{versioned_app_name}': {pipeline_types}. All components must use the same pipeline type for RPA generation.")
+            
+            rpa_pipeline_type = pipeline_types.pop() if pipeline_types else "full-container"
+            
+            # Prepare components for RPA template
             updated_components = []
             for component in definition.get("components", []):
                 base_component_name = component["name"]
                 component_name = get_component_name(base_component_name, branch)
                 updated_component = component.copy()
                 updated_component["name"] = component_name
+                
+                # Validate rpa_values for disk-image components
+                if rpa_pipeline_type == "disk-image":
+                    if "rpa_values" not in component:
+                        raise ValueError(f"Component '{component_name}' uses disk-image pipeline but missing required 'rpa_values' section")
+                    
+                    rpa_values = component["rpa_values"]
+                    required_fields = ["destination", "version", "filename", "source", "productName", "productCode", "productVersionName", "filePrefix"]
+                    missing_fields = [field for field in required_fields if field not in rpa_values]
+                    if missing_fields:
+                        raise ValueError(f"Component '{component_name}' missing required rpa_values fields: {missing_fields}")
+                    
+                    # Set default contentType
+                    if "contentType" not in rpa_values:
+                        updated_component["rpa_values"] = rpa_values.copy()
+                        updated_component["rpa_values"]["contentType"] = "disk-image"
+                
                 updated_components.append(updated_component)
 
             rpa_content = rpa_template.render(
@@ -519,6 +567,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 components=updated_components,
                 service_account_name=rpa["service_account"],
                 pipeline_path=rpa["pipeline_path"],
+                rpa_pipeline_type=rpa_pipeline_type,
             )
             rpa_filename = f"{rpa_name}.yaml"
             rpa_filepath = os.path.join(rpa_base_path, rpa_filename)

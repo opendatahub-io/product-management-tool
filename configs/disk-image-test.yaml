@@ -1,0 +1,48 @@
+definitions:
+  - application: disk-image-test
+    tenant: rhel-ai-tenant
+    branch: main
+    components:
+      - name: disk-image-test
+        context: .
+        dockerfile: Containerfile
+        url: https://gitlab.com/redhat/rhel-ai/disk-images/disk-image-test
+        stage_repository: registry.stage.redhat.io/rhelai1/bootc-test-rhel9
+        pipelinerun:
+          - pipeline: disk-image
+            build_platforms:             # OPTIONAL - Target architectures, used in pipelinerun
+              - linux-root/amd64
+            skip-checks: false           # OPTIONAL - Bypass quality gates, used in pipelinerun (default: false)
+            timeouts:                    # OPTIONAL - Execution time limits, used in pipelinerun
+              finally: 1h0m0s
+              pipeline: 6h0m0s
+              tasks: 4h0m0s
+            path_context: "."
+            snyk_project_name: ai-red-hat-enterprise-linux-ai
+            snyk_org: 01db29d0-f8e7-4709-9725-442d48ddfba6
+        rpa_values:  # REQUIRED ONLY for disk-image pipeline components
+          destination: rhelai-1_DOT_1-for-rhel-9-x86_64-isos
+          version: "1.1.1"
+          filename: "disk-image-test-1.1.1-{{ release_timestamp }}-x86_64-boot.iso.gz"
+          source: "install.iso.gz"
+          productName: Binary_RL_Red Hat Enterprise Linux AI
+          productCode: RHELAI
+          productVersionName: "1.1.1-staging"
+          filePrefix: "disk-image-test-1.1.1"
+          contentType: "disk-image"  # Optional - defaults to "disk-image"
+    release_plan:
+      - name: disk-image-test-stage
+        grace_period: 30                 # REQUIRED - Release delay in days, used in ReleasePlan
+        autorelease: true                # OPTIONAL - Enable automatic releases, used in ReleasePlan (default: false)
+    release_plan_admission:
+      - name: disk-image-test-stage           # REQUIRED - Must match release_plan name, used in RPA
+        policy: registry-rhel-ai-disk-images-stage
+        service_account: release-registry-staging
+        pipeline_path: "pipelines/managed/push-disk-images-to-cdn/push-disk-images-to-cdn.yaml"
+        tags:                            # REQUIRED - Image tagging strategy, used in RPA
+          - "latest"
+          - "test-{{ timestamp }}"
+        product_name: "Red Hat Enterprise Linux AI"
+        product_version: "1.1"          # REQUIRED - Product version, used in RPA metadata
+        product_id: [ 932 ]            # REQUIRED - Product ID for compliance, used in RPA
+        intention: staging               # REQUIRED - Target environment, used in RPA

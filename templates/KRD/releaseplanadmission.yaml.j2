@@ -13,18 +13,40 @@ spec:
   policy: [[ policy_name ]]
   data:
     singleComponentMode: [[ single_component_mode ]]
+{%- if rpa_pipeline_type == "disk-image" %}
+    cdn:
+      env: {% if "stage" in release_plan_admission_name %}stage{% elif "prod" in release_plan_admission_name %}prod{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}
+{%- endif %}
     mapping:
       components:
 {%- for component in components %}
+{%- if rpa_pipeline_type == "disk-image" %}
+        - name: [[ component.name ]]
+          staged:
+            destination: [[ component.rpa_values.destination ]]
+            version: '[[ component.rpa_values.version ]]'
+            files:
+              - filename: [[ component.rpa_values.filename ]]
+                source: [[ component.rpa_values.source ]]
+          contentGateway:
+            productName: [[ component.rpa_values.productName ]]
+            productCode: [[ component.rpa_values.productCode ]]
+            productVersionName: [[ component.rpa_values.productVersionName ]]
+            filePrefix: [[ component.rpa_values.filePrefix ]]
+            contentType: [[ component.rpa_values.contentType ]]
+{%- else %}
         - name: [[ component.name ]]
           repository: {% if "stage" in release_plan_admission_name %}[[ component.stage_repository ]]{% else %}[[ component.prod_repository ]]{% endif %}
+{%- endif %}
 {%- endfor %}
+{%- if rpa_pipeline_type == "full-container" %}
       defaults:
         pushSourceContainer: true
         tags:
 {%- for tag in tags %}
           - "[[ tag ]]"
 {%- endfor %}
+{%- endif %}
     releaseNotes:
       product_name: [[ product_name ]]
       product_version: "[[ product_version ]]"
