@@ -27,7 +27,7 @@ definitions:
           source: "install.iso.gz"
           productName: Binary_RL_Red Hat Enterprise Linux AI
           productCode: RHELAI
-          productVersionName: "1.1.1-staging"
+          productVersionName: "1.1-staging"
           filePrefix: "disk-image-test-1.1.1"
           contentType: "disk-image"  # Optional - defaults to "disk-image"
     release_plan:

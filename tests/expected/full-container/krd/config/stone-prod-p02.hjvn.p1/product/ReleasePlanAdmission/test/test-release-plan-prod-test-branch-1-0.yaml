@@ -1,0 +1,47 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlanAdmission
+metadata:
+  name: test-release-plan-prod-test-branch-1-0
+  namespace: rhtap-releng-tenant
+  labels:
+    release.appstudio.openshift.io/block-releases: 'false'
+    pp.engineering.redhat.com/business-unit: ai
+spec:
+  applications:
+    - test-full-container-test-branch-1-0
+  policy: prod-policy-name
+  data:
+    singleComponentMode: true
+    mapping:
+      components:
+        - name: test-component-1-test-branch-1-0
+          repository: quay.io/test-org-prod/test-component-1-prod
+        - name: test-component-2-test-branch-1-0
+          repository: quay.io/test-org-prod/test-component-2-prod
+      defaults:
+        pushSourceContainer: true
+        tags:
+          - "prod-latest"
+          - "prod-{{ timestamp }}"
+          - "v1.0.0-{{ revision }}"
+    releaseNotes:
+      product_name: Test Product Suite
+      product_version: "1.0.0-test"
+      product_id: [99999]
+    intention: production
+  origin: test-tenant
+  pipeline:
+    pipelineRef:
+      resolver: git
+      params:
+        - name: url
+          value: "https://github.com/konflux-ci/release-service-catalog.git"
+        - name: revision
+          value: production
+        - name: pathInRepo
+          value: "test/pipelines/test-prod-pipeline.yaml"
+    serviceAccountName: prod-service-account
+    timeouts:
+      pipeline: "4h0m0s"
+      tasks: 4h0m0s

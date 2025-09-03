@@ -28,7 +28,7 @@ definitions:
       - name: bootc-test-stage           # REQUIRED - Must match release_plan name, used in RPA
         policy: registry-rhel-ai-containers-stage
         service_account: release-registry-staging
-        pipeline_path: "pipelines/managed/rh-advisories/rh-advisories.yaml"
+        pipeline_path: "pipelines/managed/rh-push-to-registry-redhat-io/rh-push-to-registry-redhat-io.yaml"
         tags:                            # REQUIRED - Image tagging strategy, used in RPA
           - "latest"
           - "test-{{ timestamp }}"

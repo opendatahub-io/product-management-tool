@@ -1,0 +1,20 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+    git-provider: gitlab
+    mintmaker.appstudio.redhat.com/disabled: true
+  name: test-component-2-test-branch-1-0
+spec:
+  application: test-full-container-test-branch-1-0
+  componentName: test-component-2-test-branch-1-0
+  secret: pipelines-as-code-secret
+  skipGitOpsResourceGeneration: true
+  source:
+    git:
+      context: "./test-context-2"
+      dockerfileUrl: TestContainerfile-2
+      revision: "test-branch-1.0"
+      url: "https://gitlab.com/test-org/test-repo-2/test-component-2"

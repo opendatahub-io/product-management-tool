@@ -1,0 +1,7 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Application
+metadata:
+  name: test-disk-image-test-disk-branch
+spec:
+  displayName: test-disk-image-test-disk-branch

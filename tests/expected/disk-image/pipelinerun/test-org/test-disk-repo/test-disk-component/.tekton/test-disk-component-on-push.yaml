@@ -1,0 +1,71 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  annotations:
+    build.appstudio.openshift.io/repo: https://gitlab.com/test-org/test-disk-repo/test-disk-component/-/tree/{{revision}}
+    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    pipelinesascode.tekton.dev/cancel-in-progress: "false"
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "push" && target_branch.startsWith("refs/tags/")
+  labels:
+    appstudio.openshift.io/application: test-disk-image-test-disk-branch
+    appstudio.openshift.io/component: test-disk-component-test-disk-branch
+    pipelines.appstudio.openshift.io/type: build
+  name: test-disk-component-test-disk-branch-on-push
+  namespace: test-disk-tenant
+spec:
+  timeouts:
+    finally: "2h0m0s"
+    pipeline: "8h0m0s"
+    tasks: "6h0m0s"
+  params:
+  - name: git-url
+    value: '{{source_url}}'
+  - name: revision
+    value: '{{revision}}'
+  - name: output-image
+    value: quay.io/redhat-user-workloads/test-disk-tenant/test-disk-image-test-disk-branch/test-disk-component-test-disk-branch:{{revision}}
+  - name: path-context
+    value: ./test-disk-build/
+  - name: image-type
+    value: iso
+  - name: config-toml
+    value: config/config-iso.toml
+  - name: bib-file
+    value: bib.yaml
+  - name: build-platforms
+    value:
+    - linux-root/amd64
+    - linux-root/arm64
+  - name: snyk-project-name
+    value: test-disk-snyk-project
+  - name: snyk-org
+    value: test-disk-snyk-org-uuid
+  pipelineRef:
+    params:
+    - name: org
+      value: redhat
+    - name: repo
+      value: rhel-ai/konflux-data
+    - name: scmType
+      value: gitlab
+    - name: serverURL
+      value: https://gitlab.com
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: pipelines/disk-image.yaml
+    - name: token
+      value: pipelines-as-code-secret
+    - name: tokenKey
+      value: password
+    resolver: git
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-test-disk-component-test-disk-branch
+  workspaces:
+  - name: git-auth
+    secret:
+      secretName: '{{ git_auth_secret }}'
+status: {}

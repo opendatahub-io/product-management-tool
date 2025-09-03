@@ -32,6 +32,53 @@ uv run ruff check .
 # No mypy configured - ask user if needed
 ```
 
+### Testing
+```bash
+# Run all tests
+uv run pytest
+
+# Run tests with verbose output
+uv run pytest -v
+
+# Run specific test
+uv run pytest tests/test_generation.py::TestGeneration::test_krd_generation -v
+
+# Run tests for specific pipeline type
+uv run pytest tests/test_generation.py -k "full-container" -v
+uv run pytest tests/test_generation.py -k "disk-image" -v
+```
+
+### Updating Expected Test Outputs
+When templates or generation logic changes, the expected test outputs need to be regenerated:
+
+**When to regenerate:**
+- After modifying any Jinja2 templates in `templates/KRD/` or `templates/pipelinerun/`
+- After changes to `onboard-product.py` that affect generated output format
+- After rebasing on main if upstream template changes occurred
+- When tests fail due to formatting/content differences (not logic errors)
+
+**How to regenerate:**
+```bash
+# Clean existing expected outputs
+rm -rf tests/expected/full-container/* tests/expected/disk-image/*
+mkdir -p tests/expected/full-container/{krd,pipelinerun} tests/expected/disk-image/{krd,pipelinerun}
+
+# Regenerate full-container expected outputs
+KRD_PATH="$(pwd)/tests/expected/full-container/krd/" \
+GITLAB_REPO_PATH="$(pwd)/tests/expected/full-container/pipelinerun/" \
+uv run python onboard-product.py --config tests/configs/test-full-container.yaml --mode both
+
+# Regenerate disk-image expected outputs
+KRD_PATH="$(pwd)/tests/expected/disk-image/krd/" \
+GITLAB_REPO_PATH="$(pwd)/tests/expected/disk-image/pipelinerun/" \
+uv run python onboard-product.py --config tests/configs/test-disk-image.yaml --mode both
+
+# Verify tests pass
+uv run pytest tests/test_generation.py -v
+```
+
+**Important:** Always regenerate BOTH pipeline types and run tests to ensure consistency. Commit the updated expected outputs with your template/logic changes.
+
 ### Running the Tool
 ```bash
 # Generate both KRD and pipelinerun resources
@@ -63,6 +110,15 @@ uv run python onboard-product.py --config configs/basic-product.yaml --mode pipe
 ### Dependencies
 - `ruamel.yaml>=0.17.0` - YAML processing with formatting preservation
 - `jinja2>=3.0.0` - Template rendering
+- `pytest>=7.0.0` - Testing framework (dev dependency)
+
+### Testing Strategy
+- End-to-end regression tests in `tests/test_generation.py`
+- Two comprehensive test configs: `tests/configs/test-full-container.yaml` and `tests/configs/test-disk-image.yaml`
+- Expected outputs stored in `tests/expected/{pipeline-type}/{krd,pipelinerun}/`
+- Tests generate output to temporary directories and compare with expected files
+- Parametrized tests for both pipeline types (full-container and disk-image)
+- Tests cover KRD generation, pipelinerun generation, and end-to-end scenarios
 
 ### Configuration
 Environment variables for paths:

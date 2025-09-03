@@ -1,0 +1,14 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlan
+metadata:
+  labels:
+    release.appstudio.openshift.io/auto-release: "true"
+    release.appstudio.openshift.io/standing-attribution: "true"
+    release.appstudio.openshift.io/releasePlanAdmission: "test-release-plan-stage-test-branch-1-0"
+  namespace: test-tenant
+  name: test-release-plan-stage-test-branch-1-0
+spec:
+  application: test-full-container-test-branch-1-0
+  releaseGracePeriodDays: 7
+  target: rhtap-releng-tenant

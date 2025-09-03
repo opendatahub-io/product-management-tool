@@ -1,0 +1,20 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+    git-provider: gitlab
+    mintmaker.appstudio.redhat.com/disabled: true
+  name: test-disk-component-test-disk-branch
+spec:
+  application: test-disk-image-test-disk-branch
+  componentName: test-disk-component-test-disk-branch
+  secret: pipelines-as-code-secret
+  skipGitOpsResourceGeneration: true
+  source:
+    git:
+      context: "./test-disk-context"
+      dockerfileUrl: TestDiskContainerfile
+      revision: "test-disk-branch"
+      url: "https://gitlab.com/test-org/test-disk-repo/test-disk-component"
