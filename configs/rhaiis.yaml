@@ -3,22 +3,6 @@ definitions:
     tenant: ai-tenant
     branch: main
     components:
-      - name: rhaiis-tpu-ubi9
-        context: .
-        dockerfile: Containerfile.tpu-ubi9
-        url: https://gitlab.com/redhat/rhel-ai/rhaiis/containers
-        stage_repository: quay.io/aipcc/rhaiis/tpu-ubi9
-        prod_repository: registry.redhat.io/rhaiis/vllm-tpu-rhel9
-        pipelinerun:
-          - build_args_file: build-args/tpu-ubi9.conf
-            pipeline: full-container
-            variant: tpu-ubi9
-            build_platforms:
-              - linux/x86_64
-            additional_build_secret: rhel-ai-private-index-auth
-            skip-checks: true
-            timeouts:
-              pipeline: "4h0m0s"
       - name: rhaiis-cuda-ubi9
         context: .
         dockerfile: Containerfile.cuda-ubi9
@@ -48,6 +32,55 @@ definitions:
             variant: rocm-ubi9
             build_platforms:
               - linux/x86_64
+            additional_build_secret: rhel-ai-private-index-auth
+            skip-checks: true
+            timeouts:
+              pipeline: "4h0m0s"
+      - name: rhaiis-spyre-ubi9
+        context: .
+        dockerfile: Containerfile.spyre-ubi9
+        url: https://gitlab.com/redhat/rhel-ai/rhaiis/containers
+        stage_repository: quay.io/aipcc/rhaiis/spyre-ubi9
+        prod_repository: registry.redhat.io/rhaiis/vllm-spyre-rhel9
+        pipelinerun:
+          - build_args_file: build-args/spyre-ubi9.conf
+            pipeline: full-container
+            variant: spyre-ubi9
+            build_platforms:
+              - linux/x86_64
+            additional_build_secret: rhel-ai-private-index-auth
+            skip-checks: true
+            timeouts:
+              pipeline: "4h0m0s"
+      - name: rhaiis-tpu-ubi9
+        context: .
+        dockerfile: Containerfile.tpu-ubi9
+        url: https://gitlab.com/redhat/rhel-ai/rhaiis/containers
+        stage_repository: quay.io/aipcc/rhaiis/tpu-ubi9
+        prod_repository: registry.redhat.io/rhaiis/vllm-tpu-rhel9
+        pipelinerun:
+          - build_args_file: build-args/tpu-ubi9.conf
+            pipeline: full-container
+            variant: tpu-ubi9
+            build_platforms:
+              - linux/x86_64
+            additional_build_secret: rhel-ai-private-index-auth
+            skip-checks: true
+            timeouts:
+              pipeline: "4h0m0s"
+      - name: rhaiis-model-opt-cuda-ubi9
+        context: .
+        dockerfile: Containerfile.model-opt.cuda-ubi9
+        url: https://gitlab.com/redhat/rhel-ai/rhaiis/containers
+        stage_repository: quay.io/aipcc/rhaiis-model-opt/cuda-ubi9
+        prod_repository: registry.redhat.io/rhaiis/model-opt-cuda-rhel9
+        pipelinerun:
+          - build_args_file: build-args.model-opt/cuda-ubi9.conf
+            pipeline: full-container
+            variant: cuda-ubi9
+            build_platforms:
+              - linux/x86_64
+              - linux-d160-m2xlarge/arm64
             additional_build_secret: rhel-ai-private-index-auth
             skip-checks: true
             timeouts:
