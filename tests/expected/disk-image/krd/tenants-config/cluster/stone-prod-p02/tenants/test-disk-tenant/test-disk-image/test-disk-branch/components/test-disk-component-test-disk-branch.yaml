@@ -3,7 +3,7 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: Component
 metadata:
   annotations:
-    build.appstudio.openshift.io/request: configure-pac-no-mr
+    build.appstudio.openshift.io/request: configure-pac
     git-provider: gitlab
     mintmaker.appstudio.redhat.com/disabled: true
   name: test-disk-component-test-disk-branch

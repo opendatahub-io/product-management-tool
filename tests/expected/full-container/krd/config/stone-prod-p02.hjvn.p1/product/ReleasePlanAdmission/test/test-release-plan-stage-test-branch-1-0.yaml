@@ -16,9 +16,11 @@ spec:
     mapping:
       components:
         - name: test-component-1-test-branch-1-0
-          repository: quay.io/test-org/test-component-1-stage
+          repositories:
+            - url: quay.io/test-org/test-component-1-stage
         - name: test-component-2-test-branch-1-0
-          repository: quay.io/test-org/test-component-2-stage
+          repositories:
+            - url: quay.io/test-org/test-component-2-stage
       defaults:
         pushSourceContainer: true
         tags:

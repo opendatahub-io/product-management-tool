@@ -14,7 +14,11 @@ metadata:
           "test-args/build.conf".pathChanged() ||
           "ci".pathChanged() ||
           "TestContainerfile-1".pathChanged() ||
-          "context/template/***".pathChanged()
+          "context/app/***".pathChanged() ||
+          "context/common/***".pathChanged() ||
+          "context/test-variant/app/***".pathChanged() ||
+          "context/test-variant/common/***".pathChanged() ||
+          "context/test-variant/repo/*".pathChanged()
       )
   labels:
     appstudio.openshift.io/application: test-full-container-test-branch-1-0
@@ -82,4 +86,3 @@ spec:
   - name: git-auth
     secret:
       secretName: "{{ git_auth_secret }}"
-status: {}

@@ -8,7 +8,10 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
-      event == "push" && target_branch.startsWith("refs/tags/")
+      event == "push" && (
+      target_branch.startsWith("refs/tags/v") ||
+      target_branch.startsWith("refs/tags/test-variant-v")
+      )
   labels:
     appstudio.openshift.io/application: test-full-container-test-branch-1-0
     appstudio.openshift.io/component: test-component-1-test-branch-1-0
@@ -71,4 +74,3 @@ spec:
   - name: git-auth
     secret:
       secretName: "{{ git_auth_secret }}"
-status: {}
