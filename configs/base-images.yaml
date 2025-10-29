@@ -36,6 +36,38 @@ definitions:
             skip-checks: false
             timeouts:
               pipeline: "4h0m0s"
+      - name: base-image-cuda-12-9
+        context: .
+        dockerfile: Containerfile.cuda-app
+        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
+        stage_repository: quay.io/aipcc/base-images/cuda-12.9-el9.6
+        pipelinerun:
+          - build_args_file: build-args/cuda12.9-el9.6-app.conf
+            pipeline: full-container
+            variant: cuda
+            build_platforms:
+              - linux/arm64
+              - linux/x86_64
+            additional_build_secret: global-pull-secret
+            skip-checks: false
+            timeouts:
+              pipeline: "4h0m0s"
+      - name: base-image-cuda-12-8
+        context: .
+        dockerfile: Containerfile.cuda-app
+        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
+        stage_repository: quay.io/aipcc/base-images/cuda-12.8-el9.6
+        pipelinerun:
+          - build_args_file: build-args/cuda12.8-el9.6-app.conf
+            pipeline: full-container
+            variant: cuda
+            build_platforms:
+              - linux/arm64
+              - linux/x86_64
+            additional_build_secret: global-pull-secret
+            skip-checks: false
+            timeouts:
+              pipeline: "4h0m0s"
       - name: base-image-gaudi
         context: .
         dockerfile: Containerfile.gaudi-app
