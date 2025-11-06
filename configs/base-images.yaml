@@ -98,6 +98,36 @@ definitions:
             skip-checks: false
             timeouts:
               pipeline: "4h0m0s"
+      - name: base-image-rocm-6-4
+        context: .
+        dockerfile: Containerfile.rocm-app
+        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
+        stage_repository: quay.io/aipcc/base-images/rocm-6.4-el9.6
+        pipelinerun:
+          - build_args_file: build-args/rocm6.4-el9.6-app.conf
+            pipeline: full-container
+            variant: rocm
+            build_platforms:
+              - linux/x86_64
+            additional_build_secret: global-pull-secret
+            skip-checks: false
+            timeouts:
+              pipeline: "4h0m0s"
+      - name: base-image-rocm-7-0
+        context: .
+        dockerfile: Containerfile.rocm-app
+        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
+        stage_repository: quay.io/aipcc/base-images/rocm-7.0-el9.6
+        pipelinerun:
+          - build_args_file: build-args/rocm7.0-el9.6-app.conf
+            pipeline: full-container
+            variant: rocm
+            build_platforms:
+              - linux/x86_64
+            additional_build_secret: global-pull-secret
+            skip-checks: false
+            timeouts:
+              pipeline: "4h0m0s"
       - name: base-image-spyre
         context: ./context/
         dockerfile: Containerfile.spyre-app
