@@ -1,0 +1,32 @@
+---
+apiVersion: appstudio.redhat.com/v1beta2
+kind: IntegrationTestScenario
+metadata:
+  name: [[ its_name ]]
+{%- if optional %}
+  labels:
+    test.appstudio.openshift.io/optional: 'true'
+{%- endif %}
+spec:
+  application: [[ application_name ]]
+  contexts:
+{%- for component in components %}
+    - description: Component testing for [[ component.name ]]
+      name: component_[[ component.name ]]
+{%- endfor %}
+  params:
+    - name: POLICY_CONFIGURATION
+      value: [[ policy_configuration ]]
+    - name: TIMEOUT
+      value: [[ timeout ]]
+    - name: SINGLE_COMPONENT
+      value: '[[ single_component ]]'
+  resolverRef:
+    params:
+      - name: url
+        value: https://github.com/konflux-ci/build-definitions
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: pipelines/enterprise-contract.yaml
+    resolver: git
