@@ -526,42 +526,61 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
             else:
                 rpa_name = f"{base_rpa_name}-{normalized_branch}"
 
+            # Detect if this is a tech preview RPA or stage RPA
+            is_tech_preview_rpa = "tech-preview" in rpa_name or "tech_preview" in rpa_name
+            is_stage_rpa = "stage" in rpa_name
+
             # Detect pipeline types for RPA template selection
             pipeline_types = set()
             for component in definition.get("components", []):
                 for pipelinerun_config in component.get("pipelinerun", []):
                     pipeline_types.add(pipelinerun_config["pipeline"])
-            
+
             # Validate that all components use the same pipeline type
             if len(pipeline_types) > 1:
                 raise ValueError(f"Mixed pipeline types found in application '{versioned_app_name}': {pipeline_types}. All components must use the same pipeline type for RPA generation.")
-            
+
             rpa_pipeline_type = pipeline_types.pop() if pipeline_types else "full-container"
-            
+
             # Prepare components for RPA template
             updated_components = []
             for component in definition.get("components", []):
                 base_component_name = component["name"]
                 component_name = get_component_name(base_component_name, branch)
+
+                # Check if component is marked for tech preview
+                is_tech_preview_component = component.get("tech_preview", False)
+
+                # Filter components based on RPA type:
+                # - Stage RPA: include ALL components (tech preview status doesn't matter)
+                # - Tech preview prod RPA: only include tech_preview=true components
+                # - Regular prod RPA: only include tech_preview=false (or omitted) components
+                if is_stage_rpa:
+                    pass  # Include all components in stage RPA
+                elif is_tech_preview_rpa and not is_tech_preview_component:
+                    continue  # Skip non-tech-preview components for tech preview RPA
+                elif not is_tech_preview_rpa and is_tech_preview_component:
+                    continue  # Skip tech-preview components for regular prod RPA
+
                 updated_component = component.copy()
                 updated_component["name"] = component_name
-                
+
                 # Validate rpa_values for disk-image components
                 if rpa_pipeline_type == "disk-image":
                     if "rpa_values" not in component:
                         raise ValueError(f"Component '{component_name}' uses disk-image pipeline but missing required 'rpa_values' section")
-                    
+
                     rpa_values = component["rpa_values"]
                     required_fields = ["destination", "version", "filename", "source", "productName", "productCode", "productVersion", "filePrefix"]
                     missing_fields = [field for field in required_fields if field not in rpa_values]
                     if missing_fields:
                         raise ValueError(f"Component '{component_name}' missing required rpa_values fields: {missing_fields}")
-                    
+
                     # Set default contentType
                     if "contentType" not in rpa_values:
                         updated_component["rpa_values"] = rpa_values.copy()
                         updated_component["rpa_values"]["contentType"] = "disk-image"
-                
+
                 updated_components.append(updated_component)
 
             rpa_content = rpa_template.render(
@@ -579,6 +598,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 service_account_name=rpa["service_account"],
                 pipeline_path=rpa["pipeline_path"],
                 rpa_pipeline_type=rpa_pipeline_type,
+                is_tech_preview=is_tech_preview_rpa,
             )
             rpa_filename = f"{rpa_name}.yaml"
             rpa_filepath = os.path.join(rpa_base_path, rpa_filename)

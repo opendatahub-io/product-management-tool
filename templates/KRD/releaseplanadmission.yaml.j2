@@ -56,6 +56,11 @@ spec:
       product_version: "[[ product_version ]]"
       product_id: [[ product_id | list ]]
     intention: [[ intention ]]
+{%- if is_tech_preview %}
+    sign:
+      configMapName: 'hacbs-signing-pipeline-config-redhatbeta2'
+      cosignSecretName: konflux-cosign-signing-production
+{%- endif %}
   origin: [[ tenant_name ]]
   pipeline:
     pipelineRef:
