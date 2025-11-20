@@ -32,9 +32,54 @@ python3 onboard-product.py --config configs/llama-stack.yaml
 # Generate only KRD resources
 python3 onboard-product.py --config configs/basic-product.yaml --mode krd
 
-# Generate only pipelinerun resources  
+# Generate only pipelinerun resources
 python3 onboard-product.py --config configs/basic-product.yaml --mode pipelinerun
 ```
+
+### Using with Podman/Docker (No Python Required)
+
+If you don't have Python installed, you can use the containerized version:
+
+```bash
+# Build the container image
+podman build -t onboard-product:latest .
+
+# Generate both KRD and pipelinerun resources
+podman run --rm --userns=keep-id:uid=1001,gid=1001 \
+  -v $(pwd)/configs:/opt/app-root/src/configs:ro \
+  -v /path/to/konflux-release-data:/krd \
+  -v /path/to/gitlab-repos:/repos \
+  -e KRD_PATH=/krd \
+  -e GITLAB_REPO_PATH=/repos \
+  onboard-product:latest \
+  --config configs/llama-stack.yaml
+
+# Generate only pipelinerun resources
+podman run --rm --userns=keep-id:uid=1001,gid=1001 \
+  -v $(pwd)/configs:/opt/app-root/src/configs:ro \
+  -v /path/to/gitlab-repos:/repos \
+  -e GITLAB_REPO_PATH=/repos \
+  onboard-product:latest \
+  --config configs/llama-stack.yaml --mode pipelinerun
+
+# Generate only KRD resources
+podman run --rm --userns=keep-id:uid=1001,gid=1001 \
+  -v $(pwd)/configs:/opt/app-root/src/configs:ro \
+  -v /path/to/konflux-release-data:/krd \
+  -e KRD_PATH=/krd \
+  onboard-product:latest \
+  --config configs/basic-product.yaml --mode krd
+
+# View help
+podman run --rm onboard-product:latest --help
+```
+
+**Important Notes:**
+- **User namespace mapping**: Use `--userns=keep-id:uid=1001,gid=1001` to map your user to the container user (UID 1001). This ensures the container can write to your mounted directories without permission issues.
+- **Mount configs**: Mount your configs directory with `-v $(pwd)/configs:/opt/app-root/src/configs:ro` (read-only).
+- **Mount output directories**: Mount destination directories where you want files generated (KRD repo, GitLab repos).
+- **Environment variables**: Use `-e` to set paths inside the container (e.g., `-e GITLAB_REPO_PATH=/repos`).
+- **Docker alternative**: If using Docker instead of Podman, replace `podman` with `docker` and adjust the `--userns` flag to `--user $(id -u):$(id -g)` if needed.
 
 ## Configuration
 
@@ -52,7 +97,7 @@ Configure output paths and settings:
 
 ```bash
 export KRD_PATH="/path/to/konflux-release-data/"           # KRD output directory
-export GITLAB_REPO_PATH="/path/to/gitlab/repos/"           # GitLab repositories base path
+export GITLAB_REPO_PATH="/path/to/gitlab-repos/"           # GitLab repositories base path
 export CLUSTER="stone-prod-p02"                            # Target Kubernetes cluster
 export TEMPLATES_DIR="templates/KRD"                       # KRD templates directory
 export PIPELINERUN_TEMPLATE_DIR="templates/pipelinerun"    # Pipelinerun templates directory
