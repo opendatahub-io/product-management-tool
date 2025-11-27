@@ -8,6 +8,7 @@ definitions:
         dockerfile: Containerfile.cpu-app
         url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
         stage_repository: quay.io/aipcc/base-images/cpu
+        prod_repository: registry.redhat.io/rhai/base-image-cpu-rhel9
         pipelinerun:
           - build_args_file: build-args/cpu-app.conf
             pipeline: full-container
@@ -20,45 +21,14 @@ definitions:
             skip-checks: false
             timeouts:
               pipeline: "4h0m0s"
-      - name: base-image-cuda
-        context: .
-        dockerfile: Containerfile.cuda-app
-        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
-        stage_repository: quay.io/aipcc/base-images/cuda
-        pipelinerun:
-          - build_args_file: build-args/cuda-app.conf
-            pipeline: full-container
-            variant: cuda
-            build_platforms:
-              - linux/arm64
-              - linux/x86_64
-            additional_build_secret: global-pull-secret
-            skip-checks: false
-            timeouts:
-              pipeline: "4h0m0s"
       - name: base-image-cuda-12-9
         context: .
         dockerfile: Containerfile.cuda-app
         url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
         stage_repository: quay.io/aipcc/base-images/cuda-12.9-el9.6
+        prod_repository: registry.redhat.io/rhai/base-image-cuda-rhel9
         pipelinerun:
           - build_args_file: build-args/cuda12.9-el9.6-app.conf
-            pipeline: full-container
-            variant: cuda
-            build_platforms:
-              - linux/arm64
-              - linux/x86_64
-            additional_build_secret: global-pull-secret
-            skip-checks: false
-            timeouts:
-              pipeline: "4h0m0s"
-      - name: base-image-cuda-12-8
-        context: .
-        dockerfile: Containerfile.cuda-app
-        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
-        stage_repository: quay.io/aipcc/base-images/cuda-12.8-el9.6
-        pipelinerun:
-          - build_args_file: build-args/cuda12.8-el9.6-app.conf
             pipeline: full-container
             variant: cuda
             build_platforms:
@@ -73,40 +43,11 @@ definitions:
         dockerfile: Containerfile.gaudi-app
         url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
         stage_repository: quay.io/aipcc/base-images/gaudi
+        prod_repository: registry.redhat.io/rhai/base-image-gaudi-rhel9
         pipelinerun:
           - build_args_file: build-args/gaudi-app.conf
             pipeline: full-container
             variant: gaudi
-            build_platforms:
-              - linux/x86_64
-            additional_build_secret: global-pull-secret
-            skip-checks: false
-            timeouts:
-              pipeline: "4h0m0s"
-      - name: base-image-rocm
-        context: .
-        dockerfile: Containerfile.rocm-app
-        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
-        stage_repository: quay.io/aipcc/base-images/rocm
-        pipelinerun:
-          - build_args_file: build-args/rocm-app.conf
-            pipeline: full-container
-            variant: rocm
-            build_platforms:
-              - linux/x86_64
-            additional_build_secret: global-pull-secret
-            skip-checks: false
-            timeouts:
-              pipeline: "4h0m0s"
-      - name: base-image-rocm-6-4
-        context: .
-        dockerfile: Containerfile.rocm-app
-        url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
-        stage_repository: quay.io/aipcc/base-images/rocm-6.4-el9.6
-        pipelinerun:
-          - build_args_file: build-args/rocm6.4-el9.6-app.conf
-            pipeline: full-container
-            variant: rocm
             build_platforms:
               - linux/x86_64
             additional_build_secret: global-pull-secret
@@ -118,6 +59,7 @@ definitions:
         dockerfile: Containerfile.rocm-app
         url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
         stage_repository: quay.io/aipcc/base-images/rocm-7.0-el9.6
+        prod_repository: registry.redhat.io/rhai/base-image-rocm-rhel9
         pipelinerun:
           - build_args_file: build-args/rocm7.0-el9.6-app.conf
             pipeline: full-container
@@ -133,6 +75,7 @@ definitions:
         dockerfile: Containerfile.spyre-app
         url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
         stage_repository: quay.io/aipcc/base-images/spyre
+        prod_repository: registry.redhat.io/rhai/base-image-spyre-rhel9
         pipelinerun:
           - build_args_file: build-args/spyre-app.conf
             pipeline: full-container
@@ -149,6 +92,7 @@ definitions:
         dockerfile: Containerfile.tpu-app
         url: https://gitlab.com/redhat/rhel-ai/core/base-images/app
         stage_repository: quay.io/aipcc/base-images/tpu
+        prod_repository: registry.redhat.io/rhai/base-image-tpu-rhel9
         pipelinerun:
           - build_args_file: build-args/tpu-app.conf
             pipeline: full-container
@@ -163,17 +107,35 @@ definitions:
       - name: base-images-stage
         grace_period: 30
         autorelease: true
+      - name: base-images-prod
+        grace_period: 30
+        autorelease: false
     release_plan_admission:
       - name: base-images-stage
         policy: registry-ai-quay-stage
         single_component_mode: true
         tags:
           - "latest"
-          - "3.1"
-          - "3.1-{{ timestamp }}"
-        product_name: Red Hat AI Inference Server
-        product_version: "3.1"
-        product_id: [ 1001 ]
+          - "3.2"
+          - "3.2.0"
+          - "3.2.0-{{ timestamp }}"
+        product_name: Red Hat OpenShift AI
+        product_version: "3.2"
+        product_id: [728]
         intention: staging
         service_account: release-registry-rhelai
         pipeline_path: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
+      - name: base-images-prod
+        policy: registry-ai-containers-prod
+        single_component_mode: true
+        tags:
+          - "latest"
+          - "3.2"
+          - "3.2.0"
+          - "3.2.0-{{ timestamp }}"
+        product_name: Red Hat OpenShift AI
+        product_version: "3.2"
+        product_id: [728]
+        intention: production
+        service_account: release-registry-prod
+        pipeline_path: pipelines/managed/rh-advisories/rh-advisories.yaml
