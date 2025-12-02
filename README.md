@@ -28,15 +28,20 @@ uv sync
 
 ### Basic Usage
 
+Product configurations are maintained in a separate repository: [aipcc-product-onboarding-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs)
+
 ```bash
+# Clone the configs repository
+git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs.git
+
 # Generate both KRD and pipelinerun resources
-uv run python onboard-product.py --config configs/llama-stack.yaml
+uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/llama-stack/llama-stack-rhoai-2-23.yaml
 
 # Generate only KRD resources
-uv run python onboard-product.py --config configs/basic-product.yaml --mode krd
+uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode krd
 
 # Generate only pipelinerun resources
-uv run python onboard-product.py --config configs/basic-product.yaml --mode pipelinerun
+uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode pipelinerun
 ```
 
 ### Using with Podman/Docker (No Python Required)
@@ -44,42 +49,46 @@ uv run python onboard-product.py --config configs/basic-product.yaml --mode pipe
 If you don't have Python installed, you can use the containerized version:
 
 ```bash
+# Clone the configs repository (if not already cloned)
+git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs.git
+
 # Build the container image
 podman build -t onboard-product:latest .
 
 # Generate both KRD and pipelinerun resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
-  -v $(pwd)/configs:/opt/app-root/src/configs:ro \
+  -v /path/to/aipcc-product-onboarding-configs:/configs:ro \
   -v /path/to/konflux-release-data:/krd \
   -v /path/to/gitlab-repos:/repos \
   -e KRD_PATH=/krd \
   -e GITLAB_REPO_PATH=/repos \
   onboard-product:latest \
-  --config configs/llama-stack.yaml
+  --config /configs/llama-stack/llama-stack-rhoai-2-23.yaml
 
 # Generate only pipelinerun resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
-  -v $(pwd)/configs:/opt/app-root/src/configs:ro \
+  -v /path/to/aipcc-product-onboarding-configs:/configs:ro \
   -v /path/to/gitlab-repos:/repos \
   -e GITLAB_REPO_PATH=/repos \
   onboard-product:latest \
-  --config configs/llama-stack.yaml --mode pipelinerun
+  --config /configs/llama-stack/llama-stack-rhoai-2-23.yaml --mode pipelinerun
 
 # Generate only KRD resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
-  -v $(pwd)/configs:/opt/app-root/src/configs:ro \
+  -v /path/to/aipcc-product-onboarding-configs:/configs:ro \
   -v /path/to/konflux-release-data:/krd \
   -e KRD_PATH=/krd \
   onboard-product:latest \
-  --config configs/basic-product.yaml --mode krd
+  --config /configs/examples/basic-product.yaml --mode krd
 
 # View help
 podman run --rm onboard-product:latest --help
 ```
 
 **Important Notes:**
+- **Clone configs repository**: Clone [aipcc-product-onboarding-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs) separately before running the container.
 - **User namespace mapping**: Use `--userns=keep-id:uid=1001,gid=1001` to map your user to the container user (UID 1001). This ensures the container can write to your mounted directories without permission issues.
-- **Mount configs**: Mount your configs directory with `-v $(pwd)/configs:/opt/app-root/src/configs:ro` (read-only).
+- **Mount configs**: Mount the configs repository with `-v /path/to/aipcc-product-onboarding-configs:/configs:ro` (read-only).
 - **Mount output directories**: Mount destination directories where you want files generated (KRD repo, GitLab repos).
 - **Environment variables**: Use `-e` to set paths inside the container (e.g., `-e GITLAB_REPO_PATH=/repos`).
 - **Docker alternative**: If using Docker instead of Podman, replace `podman` with `docker` and adjust the `--userns` flag to `--user $(id -u):$(id -g)` if needed.
@@ -88,11 +97,17 @@ podman run --rm onboard-product:latest --help
 
 ### Product Configuration Files
 
-Product configurations are stored in the `configs/` directory:
+Product configurations are maintained in a separate repository: [aipcc-product-onboarding-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs)
 
-- `basic-product.yaml` - Simple example with detailed comments
-- `advanced-product.yaml` - Complex example showing all options
-- `llama-stack.yaml` - Real-world production example
+This repository contains configurations organized by product family:
+- `examples/` - Template configs for creating new products (basic and advanced examples)
+- `llama-stack/` - Red Hat AI Inference Server (RHOAI component)
+- `rhaiis/` - Red Hat AI Inference Server (core platform)
+- `rhelai/` - Red Hat Enterprise Linux AI bootable containers
+- `base-images/` - Red Hat OpenShift AI base images
+- `test/` - Test repository configurations
+
+See the [configs repository README](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs) for details on configuration structure and naming conventions.
 
 ### Environment Variables
 

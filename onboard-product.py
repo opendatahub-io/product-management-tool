@@ -15,12 +15,12 @@ The script supports branch-specific resource generation, allowing separate confi
 for main development branches and maintenance/release branches (e.g., rhoai-2.23).
 
 Usage:
-    python3 onboard-product.py --config configs/llama-stack.yaml --mode krd          # Generate only KRD resources
-    python3 onboard-product.py --config configs/llama-stack.yaml --mode pipelinerun  # Generate only pipelinerun resources
-    python3 onboard-product.py --config configs/llama-stack.yaml --mode both         # Generate both types
+    python3 onboard-product.py --config /path/to/config.yaml --mode krd          # Generate only KRD resources
+    python3 onboard-product.py --config /path/to/config.yaml --mode pipelinerun  # Generate only pipelinerun resources
+    python3 onboard-product.py --config /path/to/config.yaml --mode both         # Generate both types
 
 Configuration:
-    Product configurations are stored in configs/ directory
+    Product configurations are maintained in: https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs
     Templates are loaded from templates/ directory (configurable via env vars)
     Output paths are configurable via environment variables
 """
@@ -704,7 +704,7 @@ def main():
     parser.add_argument(
         "--config",
         required=True,
-        help="Path to the product configuration YAML file (e.g., configs/llama-stack.yaml)",
+        help="Path to the product configuration YAML file",
     )
     parser.add_argument(
         "--mode",

@@ -80,15 +80,21 @@ uv run pytest tests/test_generation.py -v
 **Important:** Always regenerate BOTH pipeline types and run tests to ensure consistency. Commit the updated expected outputs with your template/logic changes.
 
 ### Running the Tool
+
+Product configurations are maintained in a separate repository: https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs
+
 ```bash
+# Clone the configs repository (if not already cloned)
+git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs.git
+
 # Generate both KRD and pipelinerun resources
-uv run python onboard-product.py --config configs/llama-stack.yaml
+uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/llama-stack/llama-stack-rhoai-2-23.yaml
 
 # Generate only KRD resources
-uv run python onboard-product.py --config configs/basic-product.yaml --mode krd
+uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode krd
 
 # Generate only pipelinerun resources
-uv run python onboard-product.py --config configs/basic-product.yaml --mode pipelinerun
+uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode pipelinerun
 ```
 
 ## Architecture Notes
@@ -146,8 +152,10 @@ Pipelinerun resources as:
 ```
 
 ## Configuration Files
-- Product configs in `configs/` directory
-- Examples: basic-product.yaml, advanced-product.yaml, llama-stack.yaml
+- Product configs are maintained in a separate repository: https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs
+- Organized by product family: llama-stack/, rhaiis/, rhelai/, base-images/, examples/
+- Examples: examples/basic-product.yaml, examples/advanced-product.yaml
+- Production configs: llama-stack/llama-stack-rhoai-2-23.yaml, rhaiis/rhaiis-3-2-4.yaml, etc.
 
 ### Repository Configuration
 - Components require two repository fields:
