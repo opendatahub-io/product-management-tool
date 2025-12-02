@@ -19,21 +19,24 @@ Automated tools for onboarding new products to the Konflux platform. This tool g
 git clone <repository-url>
 cd aipcc-product-onboarding
 
-# Install dependencies
-pip install -r requirements.txt
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync dependencies and create virtual environment
+uv sync
 ```
 
 ### Basic Usage
 
 ```bash
 # Generate both KRD and pipelinerun resources
-python3 onboard-product.py --config configs/llama-stack.yaml
+uv run python onboard-product.py --config configs/llama-stack.yaml
 
 # Generate only KRD resources
-python3 onboard-product.py --config configs/basic-product.yaml --mode krd
+uv run python onboard-product.py --config configs/basic-product.yaml --mode krd
 
 # Generate only pipelinerun resources
-python3 onboard-product.py --config configs/basic-product.yaml --mode pipelinerun
+uv run python onboard-product.py --config configs/basic-product.yaml --mode pipelinerun
 ```
 
 ### Using with Podman/Docker (No Python Required)
@@ -190,12 +193,11 @@ definitions:
 ### Code Quality
 
 ```bash
-# Format and lint code
-ruff format .
-ruff check .
+# Format code
+uv run ruff format .
 
-# Run type checking (if using mypy)
-mypy onboard-product.py
+# Lint code
+uv run ruff check .
 ```
 
 ### Branch-Specific Naming

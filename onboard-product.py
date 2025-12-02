@@ -428,7 +428,8 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
         components_dir = os.path.join(base_path, "components")
         imagerepos_dir = os.path.join(base_path, "imagerepositories")
         releaseplans_dir = os.path.join(base_path, "releaseplans")
-        ensure_dirs(apps_dir, components_dir, imagerepos_dir, releaseplans_dir)
+        integrationtests_dir = os.path.join(base_path, "integrationtests")
+        ensure_dirs(apps_dir, components_dir, imagerepos_dir, releaseplans_dir, integrationtests_dir)
 
         app_template = env.get_template("application.yaml.j2")
         app_content = app_template.render(application_name=versioned_app_name)
@@ -445,6 +446,13 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
             base_component_name = component["name"]
             component_name = get_component_name(base_component_name, branch)
 
+            # Extract optional component-level configuration
+            component_config = component.get("component", {})
+            build_nudge_enabled = component_config.get("build_nudge_enabled", False)
+            build_nudges_ref = component_config.get("build_nudges_ref", [])
+            # Apply branch-aware naming to build nudge references
+            build_nudges_ref = [get_component_name(ref, branch) for ref in build_nudges_ref]
+
             comp_content = comp_template.render(
                 application_name=versioned_app_name,
                 component_name=component_name,
@@ -452,6 +460,8 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 component_dockerfile=component.get("dockerfile", "Containerfile"),
                 component_url=component["url"],
                 component_revision=branch,
+                build_nudge_enabled=build_nudge_enabled,
+                build_nudges_ref=build_nudges_ref,
             )
             comp_filename = f"{component_name}.yaml"
             write_with_newline(os.path.join(components_dir, comp_filename), comp_content)
@@ -496,6 +506,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
             releaseplan_files.append(rp_filename)
 
         releaseplanadmission_files = []
+        integrationtest_files = []
         rpa_template = env.get_template("releaseplanadmission.yaml.j2")
 
         rpa_base_path = os.path.join(
@@ -515,42 +526,61 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
             else:
                 rpa_name = f"{base_rpa_name}-{normalized_branch}"
 
+            # Detect if this is a tech preview RPA or stage RPA
+            is_tech_preview_rpa = "tech-preview" in rpa_name or "tech_preview" in rpa_name
+            is_stage_rpa = "stage" in rpa_name
+
             # Detect pipeline types for RPA template selection
             pipeline_types = set()
             for component in definition.get("components", []):
                 for pipelinerun_config in component.get("pipelinerun", []):
                     pipeline_types.add(pipelinerun_config["pipeline"])
-            
+
             # Validate that all components use the same pipeline type
             if len(pipeline_types) > 1:
                 raise ValueError(f"Mixed pipeline types found in application '{versioned_app_name}': {pipeline_types}. All components must use the same pipeline type for RPA generation.")
-            
+
             rpa_pipeline_type = pipeline_types.pop() if pipeline_types else "full-container"
-            
+
             # Prepare components for RPA template
             updated_components = []
             for component in definition.get("components", []):
                 base_component_name = component["name"]
                 component_name = get_component_name(base_component_name, branch)
+
+                # Check if component is marked for tech preview
+                is_tech_preview_component = component.get("tech_preview", False)
+
+                # Filter components based on RPA type:
+                # - Stage RPA: include ALL components (tech preview status doesn't matter)
+                # - Tech preview prod RPA: only include tech_preview=true components
+                # - Regular prod RPA: only include tech_preview=false (or omitted) components
+                if is_stage_rpa:
+                    pass  # Include all components in stage RPA
+                elif is_tech_preview_rpa and not is_tech_preview_component:
+                    continue  # Skip non-tech-preview components for tech preview RPA
+                elif not is_tech_preview_rpa and is_tech_preview_component:
+                    continue  # Skip tech-preview components for regular prod RPA
+
                 updated_component = component.copy()
                 updated_component["name"] = component_name
-                
+
                 # Validate rpa_values for disk-image components
                 if rpa_pipeline_type == "disk-image":
                     if "rpa_values" not in component:
                         raise ValueError(f"Component '{component_name}' uses disk-image pipeline but missing required 'rpa_values' section")
-                    
+
                     rpa_values = component["rpa_values"]
-                    required_fields = ["destination", "version", "filename", "source", "productName", "productCode", "productVersionName", "filePrefix"]
+                    required_fields = ["destination", "version", "filename", "source", "productName", "productCode", "productVersion", "filePrefix"]
                     missing_fields = [field for field in required_fields if field not in rpa_values]
                     if missing_fields:
                         raise ValueError(f"Component '{component_name}' missing required rpa_values fields: {missing_fields}")
-                    
+
                     # Set default contentType
                     if "contentType" not in rpa_values:
                         updated_component["rpa_values"] = rpa_values.copy()
                         updated_component["rpa_values"]["contentType"] = "disk-image"
-                
+
                 updated_components.append(updated_component)
 
             rpa_content = rpa_template.render(
@@ -568,6 +598,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 service_account_name=rpa["service_account"],
                 pipeline_path=rpa["pipeline_path"],
                 rpa_pipeline_type=rpa_pipeline_type,
+                is_tech_preview=is_tech_preview_rpa,
             )
             rpa_filename = f"{rpa_name}.yaml"
             rpa_filepath = os.path.join(rpa_base_path, rpa_filename)
@@ -576,13 +607,58 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
 
             print(f"Generated ReleasePlanAdmission '{rpa_name}' at {rpa_filepath}")
 
+            # Generate IntegrationTestScenario if configured
+            its_config = rpa.get("integration_test_scenario")
+            if its_config and its_config.get("enabled", False):
+                its_template = env.get_template("integrationtestscenario.yaml.j2")
+
+                # Determine stage/prod from RPA name for the ITS name suffix
+                if "stage" in base_rpa_name.lower() or "staging" in base_rpa_name.lower():
+                    its_suffix = "check-stage-ecp"
+                elif "prod" in base_rpa_name.lower():
+                    its_suffix = "check-prod-ecp"
+                else:
+                    its_suffix = "check-ecp"
+
+                if branch == "main":
+                    its_name = f"{base_rpa_name}-{its_suffix}"
+                else:
+                    its_name = f"{base_rpa_name}-{normalized_branch}-{its_suffix}"
+
+                # Build policy_configuration from tenant and policy
+                policy_configuration = f"rhtap-releng-tenant/{rpa['policy']}"
+
+                # Prepare component list with just names for ITS contexts
+                its_components = [{"name": comp["name"]} for comp in updated_components]
+
+                its_content = its_template.render(
+                    its_name=its_name,
+                    application_name=versioned_app_name,
+                    optional=its_config.get("optional", False),
+                    policy_configuration=policy_configuration,
+                    timeout=its_config.get("timeout", "40m0s"),
+                    single_component=str(its_config.get("single_component", True)).lower(),
+                    components=its_components,
+                )
+
+                its_filename = f"{its_name}.yaml"
+                its_filepath = os.path.join(integrationtests_dir, its_filename)
+                write_with_newline(its_filepath, its_content)
+                integrationtest_files.append(its_filename)
+
+                print(f"Generated IntegrationTestScenario '{its_name}' at {its_filepath}")
+
         if releaseplan_files:
             create_kustomization(releaseplans_dir, releaseplan_files, tenant)
+
+        if integrationtest_files:
+            create_kustomization(integrationtests_dir, integrationtest_files, tenant)
 
         app_version_directories = [
             "applications",
             "components",
             "imagerepositories",
+            "integrationtests",
             "releaseplans",
         ]
         create_kustomization(base_path, app_version_directories, tenant)

@@ -15,7 +15,7 @@ spec:
     singleComponentMode: [[ single_component_mode ]]
 {%- if rpa_pipeline_type == "disk-image" %}
     cdn:
-      env: {% if "stage" in release_plan_admission_name %}stage{% elif "prod" in release_plan_admission_name %}prod{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}
+      env: {% if "stage" in release_plan_admission_name %}stage{% elif "prod" in release_plan_admission_name %}production{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}
 {%- endif %}
     mapping:
       components:
@@ -31,7 +31,7 @@ spec:
           contentGateway:
             productName: [[ component.rpa_values.productName ]]
             productCode: [[ component.rpa_values.productCode ]]
-            productVersionName: [[ component.rpa_values.productVersionName ]]
+            productVersionName: {% if "stage" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]-staging{% elif "prod" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}
             filePrefix: [[ component.rpa_values.filePrefix ]]
             contentType: [[ component.rpa_values.contentType ]]
 {%- else %}
@@ -47,12 +47,20 @@ spec:
 {%- for tag in tags %}
           - "[[ tag ]]"
 {%- endfor %}
+{%- elif rpa_pipeline_type == "disk-image" %}
+      defaults:
+        pushSourceContainer: false
 {%- endif %}
     releaseNotes:
       product_name: [[ product_name ]]
       product_version: "[[ product_version ]]"
       product_id: [[ product_id | list ]]
     intention: [[ intention ]]
+{%- if is_tech_preview %}
+    sign:
+      configMapName: 'hacbs-signing-pipeline-config-redhatbeta2'
+      cosignSecretName: konflux-cosign-signing-production
+{%- endif %}
   origin: [[ tenant_name ]]
   pipeline:
     pipelineRef:
