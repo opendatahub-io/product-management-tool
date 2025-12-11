@@ -27,9 +27,11 @@ spec:
           contentGateway:
             productName: Test Disk Image Product
             productCode: TESTDISK
-            productVersionName: 1.0.0-test-staging
+            productVersionName: {{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}
             filePrefix: test-disk-1.0.0
             contentType: disk-image
+      defaults:
+        pushSourceContainer: false
     releaseNotes:
       product_name: Test Disk Image Suite
       product_version: "1.0.0-disk-test"

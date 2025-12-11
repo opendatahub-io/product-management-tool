@@ -6,9 +6,15 @@ Automated tools for onboarding new products to the Konflux platform. This tool g
 
 - **KRD Generation**: Creates Konflux Release Data resources (Application, Component, ImageRepository, ReleasePlan, ReleasePlanAdmission)
 - **Pipelinerun Generation**: Generates Tekton CI/CD pipeline configurations for pull requests and push events
+- **Multi-Pipeline Support**: Supports both full-container and disk-image pipeline types
 - **Branch-Aware**: Supports separate configurations for main development and maintenance branches
 - **Template-Based**: Uses Jinja2 templates for flexible resource generation
-- **Environment Configurable**: All paths and settings configurable via environment variables
+- **Flexible Configuration**: Configure via CLI arguments, TOML files, environment variables, or use sensible defaults
+
+## Requirements
+
+- **Python 3.11 or later**
+- **uv** (Python package manager)
 
 ## Quick Start
 
@@ -109,17 +115,61 @@ This repository contains configurations organized by product family:
 
 See the [configs repository README](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs) for details on configuration structure and naming conventions.
 
-### Environment Variables
+### Tool Configuration (Output Paths, Cluster Settings)
 
-Configure output paths and settings:
+The tool supports flexible configuration through multiple methods with the following priority order:
 
+**1. CLI Arguments (Highest Priority)**
 ```bash
-export KRD_PATH="/path/to/konflux-release-data/"           # KRD output directory
-export GITLAB_REPO_PATH="/path/to/gitlab-repos/"           # GitLab repositories base path
-export CLUSTER="stone-prod-p02"                            # Target Kubernetes cluster
-export TEMPLATES_DIR="templates/KRD"                       # KRD templates directory
-export PIPELINERUN_TEMPLATE_DIR="templates/pipelinerun"    # Pipelinerun templates directory
+uv run python onboard-product.py \
+  --config product.yaml \
+  --krd-path ./my-krd-output \
+  --gitlab-path ./my-gitlab-repos \
+  --cluster stone-prod-p01
 ```
+
+Available arguments:
+- `--krd-path` - Output path for KRD resources
+- `--gitlab-path` - Output path for pipelinerun resources
+- `--templates-dir` - KRD templates directory
+- `--pipelinerun-templates-dir` - Pipelinerun templates directory
+- `--cluster` - Target Kubernetes cluster
+- `--settings` - Path to TOML settings file
+
+**2. Configuration File**
+
+Create `.onboard-config.toml` in your project directory:
+
+```toml
+[paths]
+krd_path = "./output/krd"
+gitlab_repo_path = "./output/pipelinerun"
+templates_dir = "./templates/KRD"
+pipelinerun_template_dir = "./templates/pipelinerun"
+
+[cluster]
+name = "stone-prod-p02"
+```
+
+See `.onboard-config.toml.example` for a complete example.
+
+**3. Environment Variables (Backward Compatible)**
+```bash
+export KRD_PATH="/path/to/konflux-release-data/"
+export GITLAB_REPO_PATH="/path/to/gitlab-repos/"
+export CLUSTER="stone-prod-p02"
+export TEMPLATES_DIR="templates/KRD"
+export PIPELINERUN_TEMPLATE_DIR="templates/pipelinerun"
+```
+
+**4. Sensible Defaults (Lowest Priority)**
+- `krd_path`: `./output/krd`
+- `gitlab_repo_path`: `./output/pipelinerun`
+- `templates_dir`: `./templates/KRD`
+- `pipelinerun_template_dir`: `./templates/pipelinerun`
+- `cluster`: `stone-prod-p02`
+
+The tool works out of the box with no configuration required!
 
 ## Output Structure
 
@@ -197,13 +247,61 @@ definitions:
 - `component.yaml.j2` - Component build configuration
 - `imagerepository.yaml.j2` - Container image repository
 - `releaseplan.yaml.j2` - Release plan definition
-- `releaseplanadmission.yaml.j2` - Release admission control
+- `releaseplanadmission.yaml.j2` - Release admission control (supports both full-container and disk-image pipelines)
+- `integrationtestscenario.yaml.j2` - Integration test scenarios
 
 ### Pipelinerun Templates (`templates/pipelinerun/`)
 
-- `unified.yaml.j2` - Tekton pipelinerun configuration for both pull-request and push events
+- `full-container.yaml.j2` - Tekton pipelinerun for standard container builds
+- `disk-image.yaml.j2` - Tekton pipelinerun for disk/ISO image builds
+
+Both templates generate configurations for pull-request and push events.
 
 ## Development
+
+### Running Tests
+
+The project includes comprehensive end-to-end regression tests:
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run tests with verbose output
+uv run pytest -v
+
+# Run specific test
+uv run pytest tests/test_generation.py::TestGeneration::test_krd_generation -v
+
+# Run tests for specific pipeline type
+uv run pytest tests/test_generation.py -k "full-container" -v
+uv run pytest tests/test_generation.py -k "disk-image" -v
+```
+
+### Updating Expected Test Outputs
+
+When templates or generation logic changes, regenerate expected test outputs:
+
+```bash
+# Clean existing expected outputs
+rm -rf tests/expected/full-container/* tests/expected/disk-image/*
+mkdir -p tests/expected/full-container/{krd,pipelinerun} tests/expected/disk-image/{krd,pipelinerun}
+
+# Regenerate full-container expected outputs
+KRD_PATH="$(pwd)/tests/expected/full-container/krd/" \
+GITLAB_REPO_PATH="$(pwd)/tests/expected/full-container/pipelinerun/" \
+uv run python onboard-product.py --config tests/configs/test-full-container.yaml --mode both
+
+# Regenerate disk-image expected outputs
+KRD_PATH="$(pwd)/tests/expected/disk-image/krd/" \
+GITLAB_REPO_PATH="$(pwd)/tests/expected/disk-image/pipelinerun/" \
+uv run python onboard-product.py --config tests/configs/test-disk-image.yaml --mode both
+
+# Verify tests pass
+uv run pytest tests/test_generation.py -v
+```
+
+**Important:** Always regenerate both pipeline types and run tests to ensure consistency. Commit the updated expected outputs with your template/logic changes.
 
 ### Code Quality
 
@@ -213,6 +311,9 @@ uv run ruff format .
 
 # Lint code
 uv run ruff check .
+
+# Fix auto-fixable issues
+uv run ruff check --fix .
 ```
 
 ### Branch-Specific Naming

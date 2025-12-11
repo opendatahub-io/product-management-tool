@@ -6,4 +6,5 @@ resources:
   - applications
   - components
   - imagerepositories
+  - integrationtests
   - releaseplans

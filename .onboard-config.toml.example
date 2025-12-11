@@ -1,0 +1,47 @@
+# Example configuration file for product onboarding tool
+#
+# Copy this file to .onboard-config.toml and customize for your environment.
+#
+# Configuration priority:
+# 1. CLI arguments (highest priority)
+# 2. Environment variables
+# 3. This config file
+# 4. Built-in defaults (lowest priority)
+
+[paths]
+# Output path for KRD (Konflux Release Data) resources
+# Default: ./output/krd
+krd_path = "./output/krd"
+
+# Output path for pipelinerun resources (GitLab repos)
+# Default: ./output/pipelinerun
+gitlab_repo_path = "./output/pipelinerun"
+
+# Directory containing KRD Jinja2 templates
+# Default: ./templates/KRD
+templates_dir = "./templates/KRD"
+
+# Directory containing pipelinerun Jinja2 templates
+# Default: ./templates/pipelinerun
+pipelinerun_template_dir = "./templates/pipelinerun"
+
+[cluster]
+# Target Kubernetes cluster name
+# Default: stone-prod-p02
+name = "stone-prod-p02"
+
+# Example team-specific configuration:
+# Uncomment and customize for your team's shared repository paths
+#
+# [paths]
+# krd_path = "/shared/team/konflux-release-data"
+# gitlab_repo_path = "/shared/team/gitlab-repos"
+
+# Example production configuration:
+# For production deployments with absolute paths
+#
+# [paths]
+# krd_path = "/var/lib/konflux/krd"
+# gitlab_repo_path = "/var/lib/konflux/gitlab"
+# [cluster]
+# name = "stone-prod-p01"

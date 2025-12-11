@@ -25,11 +25,15 @@ Configuration:
     Output paths are configurable via environment variables
 """
 
-import os
 import argparse
+import os
+from pathlib import Path
 from urllib.parse import urlparse
-from ruamel.yaml import YAML
+
 from jinja2 import Environment, FileSystemLoader
+from ruamel.yaml import YAML
+
+from config import Config
 
 yaml = YAML()
 yaml.indent(mapping=2, sequence=4, offset=2)
@@ -57,7 +61,7 @@ def create_kustomization(directory, files, tenant):
     kustomization_file = os.path.join(directory, "kustomization.yaml")
 
     if os.path.exists(kustomization_file):
-        with open(kustomization_file, "r") as f:
+        with open(kustomization_file) as f:
             existing_content = yaml.load(f)
 
         existing_resources = existing_content.get("resources", [])
@@ -97,7 +101,7 @@ def get_directory_resources(directory):
 
     resources = []
     for item in os.listdir(directory):
-        item_path = os.path.join(directory, item)
+        os.path.join(directory, item)
         if not item.startswith(".") and item != "kustomization.yaml":
             resources.append(item)
 
@@ -190,42 +194,6 @@ def create_jinja_env(template_dir):
     )
 
 
-def load_config_and_data(config_file_path):
-    """
-    Load configuration from environment variables and product data from YAML.
-
-    All paths and settings can be overridden via environment variables,
-    making the script flexible for different deployment environments.
-
-    Args:
-        config_file_path (str): Path to the product configuration YAML file
-
-    Environment Variables:
-        TEMPLATES_DIR: Directory containing KRD templates
-        KRD_PATH: Output path for KRD resources (konflux-release-data repo)
-        CLUSTER: Target Kubernetes cluster name
-        PIPELINERUN_TEMPLATE_DIR: Directory containing pipelinerun templates
-        GITLAB_REPO_PATH: Base path for GitLab repository checkouts
-
-    Returns:
-        tuple: (config_dict, product_data)
-    """
-    config = {
-        "krd_template_dir": os.environ.get("TEMPLATES_DIR", "templates/KRD"),
-        "krd_path": os.environ.get("KRD_PATH", "/home/jrusz/repos/konflux-release-data/"),
-        "cluster": os.environ.get("CLUSTER", "stone-prod-p02"),
-        "pipelinerun_template_dir": os.environ.get(
-            "PIPELINERUN_TEMPLATE_DIR", "templates/pipelinerun"
-        ),
-        "gitlab_repo_path": os.environ.get("GITLAB_REPO_PATH", "/home/jrusz/other-repos/"),
-    }
-
-    with open(config_file_path, "r") as f:
-        data = yaml.load(f)
-
-    return config, data
-
-
 def parse_gitlab_url(url):
     """
     Parse GitLab URL to extract organization and repository path.
@@ -300,13 +268,17 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
 
             for pipelinerun_config in component.get("pipelinerun", []):
                 pipeline = pipelinerun_config["pipeline"]
-                
+
                 # Extract common parameters
                 build_platforms = pipelinerun_config.get("build_platforms", [])
                 timeouts = pipelinerun_config.get("timeouts", {})
                 path_context = pipelinerun_config.get("path_context", "./context/")
-                snyk_project_name = pipelinerun_config.get("snyk_project_name", "ai-red-hat-inference-server")
-                snyk_org = pipelinerun_config.get("snyk_org", "98e4f46e-334c-414b-b444-43361f404b2f")
+                snyk_project_name = pipelinerun_config.get(
+                    "snyk_project_name", "ai-red-hat-inference-server"
+                )
+                snyk_org = pipelinerun_config.get(
+                    "snyk_org", "98e4f46e-334c-414b-b444-43361f404b2f"
+                )
 
                 # Select template based on pipeline type
                 if pipeline == "disk-image":
@@ -319,7 +291,9 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                     variant = pipelinerun_config.get("variant", "")
                     skip_checks = pipelinerun_config.get("skip-checks", False)
                 else:
-                    raise ValueError(f"Unknown pipeline type '{pipeline}' for component '{component_name}'. Supported types: 'full-container', 'disk-image'")
+                    raise ValueError(
+                        f"Unknown pipeline type '{pipeline}' for component '{component_name}'. Supported types: 'full-container', 'disk-image'"
+                    )
 
                 pipeline_template = env.get_template(template_name)
 
@@ -343,12 +317,14 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
 
                     # Add parameters specific to full-container pipeline
                     if pipeline == "full-container":
-                        template_params.update({
-                            "build_args_file": build_args_file,
-                            "additional_build_secret": additional_build_secret,
-                            "variant": variant,
-                            "skip_checks": skip_checks,
-                        })
+                        template_params.update(
+                            {
+                                "build_args_file": build_args_file,
+                                "additional_build_secret": additional_build_secret,
+                                "variant": variant,
+                                "skip_checks": skip_checks,
+                            }
+                        )
 
                     pr_content = pipeline_template.render(**template_params)
 
@@ -429,7 +405,9 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
         imagerepos_dir = os.path.join(base_path, "imagerepositories")
         releaseplans_dir = os.path.join(base_path, "releaseplans")
         integrationtests_dir = os.path.join(base_path, "integrationtests")
-        ensure_dirs(apps_dir, components_dir, imagerepos_dir, releaseplans_dir, integrationtests_dir)
+        ensure_dirs(
+            apps_dir, components_dir, imagerepos_dir, releaseplans_dir, integrationtests_dir
+        )
 
         app_template = env.get_template("application.yaml.j2")
         app_content = app_template.render(application_name=versioned_app_name)
@@ -538,7 +516,9 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
 
             # Validate that all components use the same pipeline type
             if len(pipeline_types) > 1:
-                raise ValueError(f"Mixed pipeline types found in application '{versioned_app_name}': {pipeline_types}. All components must use the same pipeline type for RPA generation.")
+                raise ValueError(
+                    f"Mixed pipeline types found in application '{versioned_app_name}': {pipeline_types}. All components must use the same pipeline type for RPA generation."
+                )
 
             rpa_pipeline_type = pipeline_types.pop() if pipeline_types else "full-container"
 
@@ -568,13 +548,26 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 # Validate rpa_values for disk-image components
                 if rpa_pipeline_type == "disk-image":
                     if "rpa_values" not in component:
-                        raise ValueError(f"Component '{component_name}' uses disk-image pipeline but missing required 'rpa_values' section")
+                        raise ValueError(
+                            f"Component '{component_name}' uses disk-image pipeline but missing required 'rpa_values' section"
+                        )
 
                     rpa_values = component["rpa_values"]
-                    required_fields = ["destination", "version", "filename", "source", "productName", "productCode", "productVersion", "filePrefix"]
+                    required_fields = [
+                        "destination",
+                        "version",
+                        "filename",
+                        "source",
+                        "productName",
+                        "productCode",
+                        "productVersion",
+                        "filePrefix",
+                    ]
                     missing_fields = [field for field in required_fields if field not in rpa_values]
                     if missing_fields:
-                        raise ValueError(f"Component '{component_name}' missing required rpa_values fields: {missing_fields}")
+                        raise ValueError(
+                            f"Component '{component_name}' missing required rpa_values fields: {missing_fields}"
+                        )
 
                     # Set default contentType
                     if "contentType" not in rpa_values:
@@ -693,39 +686,126 @@ def main():
     Parses command line arguments and orchestrates the generation of either
     KRD resources, pipelinerun resources, or both based on the --mode flag.
 
+    Configuration is loaded in priority order:
+    1. CLI arguments (highest priority)
+    2. Environment variables (backward compatible)
+    3. Configuration file (.onboard-config.toml)
+    4. Sensible defaults (lowest priority)
+
     Command Line Arguments:
         --config: Path to the product configuration YAML file (required)
         --mode: Generation mode (krd, pipelinerun, or both) - defaults to 'both'
+        --settings: Path to TOML settings file (default: ./.onboard-config.toml)
+        --krd-path: Output path for KRD resources (default: ./output/krd)
+        --gitlab-path: Output path for pipelinerun resources (default: ./output/pipelinerun)
+        --templates-dir: KRD templates directory (default: ./templates/KRD)
+        --pipelinerun-templates-dir: Pipelinerun templates directory (default: ./templates/pipelinerun)
+        --cluster: Target Kubernetes cluster (default: stone-prod-p02)
 
-    Environment Variables:
-        See load_config_and_data() for complete list of configurable paths
+    Environment Variables (backward compatible):
+        TEMPLATES_DIR: KRD templates directory
+        KRD_PATH: Output path for KRD resources
+        CLUSTER: Target Kubernetes cluster name
+        PIPELINERUN_TEMPLATE_DIR: Pipelinerun templates directory
+        GITLAB_REPO_PATH: Base path for GitLab repository checkouts
     """
-    parser = argparse.ArgumentParser(description="Generate KRD templates and/or pipelinerun files")
+    parser = argparse.ArgumentParser(
+        description="Generate KRD and pipelinerun resources for Konflux platform",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    # Required arguments
     parser.add_argument(
         "--config",
         required=True,
+        type=Path,
         help="Path to the product configuration YAML file",
     )
+
+    # Mode selection
     parser.add_argument(
         "--mode",
         choices=["krd", "pipelinerun", "both"],
         default="both",
         help="Generation mode: krd, pipelinerun, or both (default: both)",
     )
+
+    # Settings file
+    parser.add_argument(
+        "--settings",
+        type=Path,
+        help="Path to TOML settings file (default: ./.onboard-config.toml)",
+    )
+
+    # Path overrides
+    parser.add_argument(
+        "--krd-path",
+        type=Path,
+        dest="krd_path",
+        help="Output path for KRD resources (default: ./output/krd)",
+    )
+
+    parser.add_argument(
+        "--gitlab-path",
+        type=Path,
+        dest="gitlab_repo_path",
+        help="Output path for pipelinerun resources (default: ./output/pipelinerun)",
+    )
+
+    parser.add_argument(
+        "--templates-dir",
+        type=Path,
+        dest="krd_template_dir",
+        help="KRD templates directory (default: ./templates/KRD)",
+    )
+
+    parser.add_argument(
+        "--pipelinerun-templates-dir",
+        type=Path,
+        dest="pipelinerun_template_dir",
+        help="Pipelinerun templates directory (default: ./templates/pipelinerun)",
+    )
+
+    # Cluster
+    parser.add_argument(
+        "--cluster",
+        help="Target Kubernetes cluster (default: stone-prod-p02)",
+    )
+
     args = parser.parse_args()
 
-    config, data = load_config_and_data(args.config)
+    # Load configuration with hierarchical priority
+    config = Config(
+        config_file=args.settings,
+        cli_overrides={
+            "krd_path": args.krd_path,
+            "gitlab_repo_path": args.gitlab_repo_path,
+            "krd_template_dir": args.krd_template_dir,
+            "pipelinerun_template_dir": args.pipelinerun_template_dir,
+            "cluster": args.cluster,
+        },
+    )
 
+    # Load product data from YAML
+    with open(args.config) as f:
+        data = yaml.load(f)
+
+    # Generate resources based on mode
     if args.mode in ["krd", "both"]:
-        print(f"Generating KRD templates...")
+        print(f"Generating KRD templates to {config['krd_path']}")
         render_krd_templates(
-            data, config["krd_template_dir"], config["krd_path"], config["cluster"]
+            data,
+            str(config["krd_template_dir"]),
+            str(config["krd_path"]),
+            config["cluster"],
         )
 
     if args.mode in ["pipelinerun", "both"]:
-        print(f"Generating pipelinerun templates...")
+        print(f"Generating pipelinerun templates to {config['gitlab_repo_path']}")
         render_pipelinerun_templates(
-            data, config["pipelinerun_template_dir"], config["gitlab_repo_path"]
+            data,
+            str(config["pipelinerun_template_dir"]),
+            str(config["gitlab_repo_path"]),
         )
 
     print("Generation completed!")

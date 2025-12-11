@@ -33,6 +33,7 @@ definitions:
           source: "test-install.iso.gz"
           productName: "Test Disk Image Product"
           productCode: "TESTDISK"
+          productVersion: "1.0.0-test"
           productVersionName: "1.0.0-test-staging"
           filePrefix: "test-disk-1.0.0"
           contentType: "disk-image"
