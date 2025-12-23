@@ -20,7 +20,7 @@ COPY --chown=1001:0 pyproject.toml uv.lock* ./
 RUN uv sync --frozen
 
 # Copy application code and templates
-COPY --chown=1001:0 --parents onboard-product.py templates/ ./
+COPY --chown=1001:0 --parents config.py onboard-product.py templates/ ./
 
 # Set the entrypoint to use uv run
 ENTRYPOINT ["uv", "run", "python", "onboard-product.py"]
