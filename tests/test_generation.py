@@ -145,7 +145,11 @@ class TestGeneration:
 
         # Generate KRD resources (using temp directory for output)
         render_krd_templates(
-            data, str(config["krd_template_dir"]), str(self.temp_krd), config["cluster"]
+            data,
+            str(config["krd_template_dir"]),
+            str(self.temp_krd),
+            config["cluster"],
+            recreate=False,
         )
 
         # Compare generated output with expected
@@ -199,7 +203,11 @@ class TestGeneration:
 
         # Generate both KRD and pipelinerun resources
         render_krd_templates(
-            data, str(config["krd_template_dir"]), str(self.temp_krd), config["cluster"]
+            data,
+            str(config["krd_template_dir"]),
+            str(self.temp_krd),
+            config["cluster"],
+            recreate=False,
         )
 
         render_pipelinerun_templates(

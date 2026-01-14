@@ -27,6 +27,7 @@ Configuration:
 
 import argparse
 import os
+import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -337,7 +338,7 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                     )
 
 
-def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02"):
+def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02", recreate=False):
     """
     Generate Konflux Release Data (KRD) resources for product onboarding.
 
@@ -356,6 +357,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
         template_dir (str): Directory containing KRD Jinja2 templates
         krd_path (str): Output path (konflux-release-data repository)
         cluster (str): Target Kubernetes cluster name
+        recreate (bool): If True, remove and recreate tenant folders before generation
 
     Output Structure:
         {krd_path}/tenants-config/cluster/{cluster}/tenants/{tenant}/{app_name}/{app_version}/
@@ -400,14 +402,17 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
             normalized_branch,
         )
 
+        # Remove base_path if recreate flag is set
+        if recreate and os.path.exists(base_path):
+            print(f"Removing existing directory: {base_path}")
+            shutil.rmtree(base_path)
+
         apps_dir = os.path.join(base_path, "applications")
         components_dir = os.path.join(base_path, "components")
         imagerepos_dir = os.path.join(base_path, "imagerepositories")
         releaseplans_dir = os.path.join(base_path, "releaseplans")
         integrationtests_dir = os.path.join(base_path, "integrationtests")
-        ensure_dirs(
-            apps_dir, components_dir, imagerepos_dir, releaseplans_dir, integrationtests_dir
-        )
+        ensure_dirs(apps_dir, components_dir, imagerepos_dir, releaseplans_dir)
 
         app_template = env.get_template("application.yaml.j2")
         app_content = app_template.render(application_name=versioned_app_name)
@@ -542,6 +547,10 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                 elif not is_tech_preview_rpa and is_tech_preview_component:
                     continue  # Skip tech-preview components for regular prod RPA
 
+                # For prod RPAs (non-stage), skip components without prod_repository
+                if not is_stage_rpa and "prod_repository" not in component:
+                    continue
+
                 updated_component = component.copy()
                 updated_component["name"] = component_name
 
@@ -634,6 +643,9 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
                     components=its_components,
                 )
 
+                # Create integrationtests directory only when needed
+                ensure_dirs(integrationtests_dir)
+
                 its_filename = f"{its_name}.yaml"
                 its_filepath = os.path.join(integrationtests_dir, its_filename)
                 write_with_newline(its_filepath, its_content)
@@ -647,14 +659,10 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02")
         if integrationtest_files:
             create_kustomization(integrationtests_dir, integrationtest_files, tenant)
 
-        app_version_directories = [
-            "applications",
-            "components",
-            "imagerepositories",
-            "integrationtests",
-            "releaseplans",
-        ]
-        create_kustomization(base_path, app_version_directories, tenant)
+        # Dynamically get all subdirectories for the base_path kustomization
+        app_version_directories = get_directory_resources(base_path)
+        if app_version_directories:
+            create_kustomization(base_path, app_version_directories, tenant)
 
         print(
             f"Generated files for application '{versioned_app_name}' in tenant '{tenant}' at {base_path}"
@@ -701,6 +709,7 @@ def main():
         --templates-dir: KRD templates directory (default: ./templates/KRD)
         --pipelinerun-templates-dir: Pipelinerun templates directory (default: ./templates/pipelinerun)
         --cluster: Target Kubernetes cluster (default: stone-prod-p02)
+        --recreate: Remove and recreate tenant folders before generation (prevents orphaned resources)
 
     Environment Variables (backward compatible):
         TEMPLATES_DIR: KRD templates directory
@@ -772,6 +781,13 @@ def main():
         help="Target Kubernetes cluster (default: stone-prod-p02)",
     )
 
+    # Recreate flag
+    parser.add_argument(
+        "--recreate",
+        action="store_true",
+        help="Remove and recreate tenant folders before generating resources",
+    )
+
     args = parser.parse_args()
 
     # Load configuration with hierarchical priority
@@ -798,6 +814,7 @@ def main():
             str(config["krd_template_dir"]),
             str(config["krd_path"]),
             config["cluster"],
+            args.recreate,
         )
 
     if args.mode in ["pipelinerun", "both"]:

@@ -10,6 +10,9 @@ Automated tools for onboarding new products to the Konflux platform. This tool g
 - **Branch-Aware**: Supports separate configurations for main development and maintenance branches
 - **Template-Based**: Uses Jinja2 templates for flexible resource generation
 - **Flexible Configuration**: Configure via CLI arguments, TOML files, environment variables, or use sensible defaults
+- **Smart Component Filtering**: Automatically filters components in production ReleasePlanAdmissions based on `prod_repository` availability
+- **Clean Regeneration**: `--recreate` flag removes old resources before generation to prevent orphaned files
+- **Conditional Integration Tests**: Only creates `integrationtests/` directory when integration test scenarios are configured
 
 ## Requirements
 
@@ -135,6 +138,7 @@ Available arguments:
 - `--pipelinerun-templates-dir` - Pipelinerun templates directory
 - `--cluster` - Target Kubernetes cluster
 - `--settings` - Path to TOML settings file
+- `--recreate` - Remove and recreate tenant folders before generation (prevents orphaned resources)
 
 **2. Configuration File**
 
@@ -179,6 +183,7 @@ The tool works out of the box with no configuration required!
 ├── applications/{app}.yaml
 ├── components/{component}.yaml
 ├── imagerepositories/{component}.yaml
+├── integrationtests/{test}.yaml   # Only created if integration tests configured
 └── releaseplans/{releaseplan}.yaml
 
 {KRD_PATH}/config/{cluster}.hjvn.p1/product/ReleasePlanAdmission/{tenant}/
@@ -191,6 +196,67 @@ The tool works out of the box with no configuration required!
 ├── {component}-on-pull-request.yaml
 └── {component}-on-push.yaml
 ```
+
+## Advanced Features
+
+### Clean Regeneration with --recreate
+
+The `--recreate` flag removes and recreates tenant folders before generating resources, preventing orphaned files when components are removed from your configuration:
+
+```bash
+# Clean regeneration - removes old resources first
+uv run python onboard-product.py --config product.yaml --recreate
+```
+
+**Use cases:**
+- Removed components from your configuration (prevents orphaned component/imagerepository files)
+- Changed branch names or application structure
+- Want a clean slate matching your current configuration exactly
+
+**Without --recreate:** Files are merged/updated, deleted components remain in the output
+**With --recreate:** Complete folder is removed and regenerated from scratch
+
+### Component Filtering for Production Releases
+
+Components are automatically filtered in ReleasePlanAdmission resources based on repository configuration:
+
+**Stage ReleasePlanAdmissions:**
+- Include ALL components regardless of repository configuration
+- Use `stage_repository` field from component configuration
+
+**Production ReleasePlanAdmissions:**
+- Only include components that have `prod_repository` defined
+- Components without `prod_repository` are automatically excluded
+- Prevents incomplete production releases
+
+**Example configuration:**
+```yaml
+components:
+  - name: stable-component
+    stage_repository: quay.io/org/stable-stage
+    prod_repository: quay.io/org/stable-prod     # Included in prod RPA
+
+  - name: experimental-component
+    stage_repository: quay.io/org/experimental-stage
+    # No prod_repository = excluded from prod RPA
+```
+
+### Integration Test Directory Management
+
+The `integrationtests/` directory is only created when integration test scenarios are explicitly configured:
+
+```yaml
+release_plan_admission:
+  - name: my-product-stage
+    # ... other fields ...
+    integration_test_scenario:
+      enabled: true              # Creates integrationtests/ directory
+      optional: false
+      timeout: "40m0s"
+```
+
+**When enabled:** Creates `integrationtests/` directory with IntegrationTestScenario resources
+**When disabled/omitted:** No directory created, kustomization.yaml excludes it automatically
 
 ## Configuration Schema
 
@@ -207,7 +273,8 @@ definitions:
         context: .                       # Build context
         dockerfile: Containerfile        # Dockerfile path
         url: https://gitlab.com/...       # Repository URL
-        repository: quay.io/...          # Container registry
+        stage_repository: quay.io/.../stage  # Stage container registry (full-container only)
+        prod_repository: quay.io/.../prod    # OPTIONAL - Production registry (full-container only)
         local_repo_path: /path/to/repo   # OPTIONAL - Override repo path for .tekton files
         
         pipelinerun:
