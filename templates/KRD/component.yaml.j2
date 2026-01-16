@@ -3,25 +3,25 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: Component
 metadata:
   annotations:
-    git-provider: gitlab
-    git-provider-url: 'https://gitlab.com'
-    build.appstudio.openshift.io/request: configure-pac
 {%- if build_nudge_enabled %}
-    build.appstudio.openshift.io/build-nudge-simple-branch: 'true'
+    build.appstudio.openshift.io/build-nudge-simple-branch: "true"
 {%- endif %}
+    build.appstudio.openshift.io/request: configure-pac
+    git-provider: gitlab
+    git-provider-url: "https://gitlab.com"
     mintmaker.appstudio.redhat.com/disabled: true
   name: [[ component_name ]]
 spec:
   application: [[ application_name ]]
-  componentName: [[ component_name ]]
-  skipGitOpsResourceGeneration: true
-  secret: pipelines-as-code-secret
 {%- if build_nudge_enabled and build_nudges_ref %}
   build-nudges-ref:
 {%- for ref in build_nudges_ref %}
     - [[ ref ]]
 {%- endfor %}
 {%- endif %}
+  componentName: [[ component_name ]]
+  secret: pipelines-as-code-secret
+  skipGitOpsResourceGeneration: true
   source:
     git:
       context: "[[ component_context ]]"

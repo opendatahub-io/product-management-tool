@@ -233,6 +233,124 @@ class TestGeneration:
             )
 
 
+class TestMultiConfig:
+    """Test multi-config processing with glob patterns and --config-dir."""
+
+    def setup_method(self):
+        """Set up test environment with temporary directories."""
+        self.test_dir = Path(__file__).parent
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.temp_krd = self.temp_dir / "krd"
+        self.temp_krd.mkdir()
+
+    def teardown_method(self):
+        """Clean up temporary directories."""
+        shutil.rmtree(self.temp_dir)
+
+    def test_collect_config_files_glob_pattern(self):
+        """Test collecting config files using glob pattern."""
+        from pathlib import Path
+
+        # Import collect_config_files from onboard-product.py
+        config_files = onboard_product.collect_config_files(["tests/configs/test-*.yaml"], None)
+
+        # Should find both test-full-container.yaml and test-disk-image.yaml
+        assert len(config_files) == 2
+        assert all(isinstance(cf, Path) for cf in config_files)
+        assert any("test-full-container.yaml" in str(cf) for cf in config_files)
+        assert any("test-disk-image.yaml" in str(cf) for cf in config_files)
+
+    def test_collect_config_files_config_dir(self):
+        """Test collecting config files using --config-dir."""
+        from pathlib import Path
+
+        config_dir = self.test_dir / "configs/multi-config-test"
+        config_files = onboard_product.collect_config_files(None, config_dir)
+
+        # Should find all 3 config files in multi-config-test directory
+        assert len(config_files) == 3
+        assert all(isinstance(cf, Path) for cf in config_files)
+        assert all(cf.suffix == ".yaml" for cf in config_files)
+
+    def test_collect_config_files_combined(self):
+        """Test combining --config glob pattern and --config-dir."""
+        from pathlib import Path
+
+        config_dir = self.test_dir / "configs/multi-config-test"
+        config_files = onboard_product.collect_config_files(
+            ["tests/configs/test-full-container.yaml"], config_dir
+        )
+
+        # Should find test-full-container.yaml + all 3 from multi-config-test
+        assert len(config_files) == 4
+        assert all(isinstance(cf, Path) for cf in config_files)
+
+    def test_collect_config_files_no_duplicates(self):
+        """Test that duplicate paths are removed."""
+
+        config_dir = self.test_dir / "configs/multi-config-test"
+        # Specify a file both as --config and it's in --config-dir
+        config_files = onboard_product.collect_config_files(
+            ["tests/configs/multi-config-test/config1.yaml"], config_dir
+        )
+
+        # Should only appear once
+        assert len(config_files) == 3  # config1, config2, config3 (no duplicates)
+
+    def test_collect_config_files_error_no_configs(self):
+        """Test error when no configs are found."""
+        with pytest.raises(ValueError, match="No config files found"):
+            onboard_product.collect_config_files(["nonexistent/*.yaml"], None)
+
+    def test_collect_config_files_error_bad_directory(self):
+        """Test error when directory doesn't exist."""
+        from pathlib import Path
+
+        bad_dir = Path("/nonexistent/directory")
+        with pytest.raises(ValueError, match="Config directory does not exist"):
+            onboard_product.collect_config_files(None, bad_dir)
+
+    def test_multi_config_krd_generation(self):
+        """Test KRD generation with multiple configs."""
+        config_dir = self.test_dir / "configs/multi-config-test"
+        config = Config()
+
+        # Collect configs using our helper function
+        config_files = onboard_product.collect_config_files(None, config_dir)
+
+        # Load and merge all definitions
+        all_definitions = []
+        for config_file in config_files:
+            with open(config_file) as f:
+                data = yaml.load(f)
+                all_definitions.extend(data.get("definitions", []))
+
+        merged_data = {"definitions": all_definitions}
+
+        # Generate KRD resources
+        render_krd_templates(
+            merged_data,
+            str(config["krd_template_dir"]),
+            str(self.temp_krd),
+            config["cluster"],
+            recreate=False,
+        )
+
+        # Verify all 3 applications were processed
+        tenants_dir = self.temp_krd / "tenants-config/cluster/stone-prod-p02/tenants"
+
+        # Check multi-test-tenant (2 apps: app1 and app2)
+        multi_test_tenant = tenants_dir / "multi-test-tenant"
+        assert multi_test_tenant.exists()
+        assert (multi_test_tenant / "multi-test-app1/main").exists()
+        assert (multi_test_tenant / "multi-test-app2/main").exists()
+
+        # Check another-tenant (1 app: app3)
+        another_tenant = tenants_dir / "another-tenant"
+        assert another_tenant.exists()
+        assert (another_tenant / "multi-test-app3/v1-0").exists()
+
+
 if __name__ == "__main__":
     # Allow running tests directly
     pytest.main([__file__])

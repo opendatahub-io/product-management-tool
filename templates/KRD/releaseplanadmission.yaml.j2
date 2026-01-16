@@ -5,8 +5,8 @@ metadata:
   name: [[ release_plan_admission_name ]]
   namespace: rhtap-releng-tenant
   labels:
-    release.appstudio.openshift.io/block-releases: 'false'
     pp.engineering.redhat.com/business-unit: ai
+    release.appstudio.openshift.io/block-releases: "false"
 spec:
   applications:
     - [[ application_name ]]
@@ -24,20 +24,26 @@ spec:
         - name: [[ component.name ]]
           staged:
             destination: [[ component.rpa_values.destination ]]
-            version: '[[ component.rpa_values.version ]]'
+            version: "[[ component.rpa_values.version ]]"
             files:
               - filename: [[ component.rpa_values.filename ]]
                 source: [[ component.rpa_values.source ]]
           contentGateway:
-            productName: [[ component.rpa_values.productName ]]
-            productCode: [[ component.rpa_values.productCode ]]
-            productVersionName: {% if "stage" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]-staging{% elif "prod" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}
-            filePrefix: [[ component.rpa_values.filePrefix ]]
+            productName: "[[ component.rpa_values.productName ]]"
+            productCode: "[[ component.rpa_values.productCode ]]"
+            productVersionName: "{% if "stage" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]-staging{% elif "prod" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}"
+            filePrefix: "[[ component.rpa_values.filePrefix ]]"
             contentType: [[ component.rpa_values.contentType ]]
+{%- if component.pushSourceContainer is defined %}
+          pushSourceContainer: [[ component.pushSourceContainer | lower ]]
+{%- endif %}
 {%- else %}
         - name: [[ component.name ]]
           repositories:
             - url: {% if "stage" in release_plan_admission_name %}[[ component.stage_repository ]]{% else %}[[ component.prod_repository ]]{% endif %}
+{%- if component.pushSourceContainer is defined %}
+          pushSourceContainer: [[ component.pushSourceContainer | lower ]]
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- if rpa_pipeline_type == "full-container" %}
@@ -58,7 +64,7 @@ spec:
     intention: [[ intention ]]
 {%- if is_tech_preview %}
     sign:
-      configMapName: 'hacbs-signing-pipeline-config-redhatbeta2'
+      configMapName: "hacbs-signing-pipeline-config-redhatbeta2"
       cosignSecretName: konflux-cosign-signing-production
 {%- endif %}
   origin: [[ tenant_name ]]

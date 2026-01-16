@@ -26,6 +26,7 @@ Configuration:
 """
 
 import argparse
+import glob
 import os
 import shutil
 from pathlib import Path
@@ -107,6 +108,56 @@ def get_directory_resources(directory):
             resources.append(item)
 
     return sorted(resources)
+
+
+def collect_config_files(config_patterns, config_dir):
+    """
+    Collect all config files from patterns and directory.
+
+    Args:
+        config_patterns (list): List of file paths or glob patterns (can be None)
+        config_dir (Path): Directory to scan for YAML files (can be None)
+
+    Returns:
+        list: Sorted list of Path objects for config files
+
+    Raises:
+        ValueError: If no config files found or directory doesn't exist
+    """
+    config_files = []
+
+    # Process --config patterns
+    if config_patterns:
+        for pattern in config_patterns:
+            matches = glob.glob(pattern, recursive=True)
+            if matches:
+                config_files.extend([Path(m).resolve() for m in matches])
+            else:
+                # Treat as literal path if no glob matches
+                path = Path(pattern)
+                if path.exists():
+                    config_files.append(path.resolve())
+                # If path doesn't exist and no glob matches, skip it
+
+    # Process --config-dir
+    if config_dir:
+        if not config_dir.exists():
+            raise ValueError(f"Config directory does not exist: {config_dir}")
+        if not config_dir.is_dir():
+            raise ValueError(f"Config directory is not a directory: {config_dir}")
+
+        yaml_files = list(config_dir.glob("*.yaml"))
+        # Filter out hidden/backup files
+        yaml_files = [f.resolve() for f in yaml_files if not f.name.startswith((".", "_", "~"))]
+        config_files.extend(yaml_files)
+
+    # Remove duplicates (after resolving paths) and sort
+    config_files = sorted(set(config_files))
+
+    if not config_files:
+        raise ValueError("No config files found matching the specified patterns/directory")
+
+    return config_files
 
 
 def get_application_name(base_name, branch):
@@ -380,8 +431,84 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
     env = create_jinja_env(template_dir)
 
     tenant_app_names = {}
+    definitions = data.get("definitions", [])
 
-    for definition in data.get("definitions", []):
+    # First pass: If recreate flag is set, selectively delete subdirectories
+    # Keep non-ecp integration tests by deleting only ecp files from integrationtests/
+    if recreate:
+        paths_to_process = set()
+        for definition in definitions:
+            tenant = definition["tenant"]
+            app_name = definition["application"]
+            branch, normalized_branch, _ = get_branch_info(definition)
+
+            base_path = os.path.join(
+                krd_path,
+                "tenants-config",
+                "cluster",
+                cluster,
+                "tenants",
+                tenant,
+                app_name,
+                normalized_branch,
+            )
+
+            if os.path.exists(base_path):
+                paths_to_process.add(base_path)
+
+        # Process each path with selective deletion
+        if paths_to_process:
+            print(
+                f"\n--recreate: Cleaning {len(paths_to_process)} application director{'y' if len(paths_to_process) == 1 else 'ies'}:"
+            )
+
+            for base_path in sorted(paths_to_process):
+                print(f"  {base_path}")
+
+                # Delete managed subdirectories entirely
+                subdirs_to_delete = [
+                    "applications",
+                    "components",
+                    "imagerepositories",
+                    "releaseplans",
+                ]
+                for subdir in subdirs_to_delete:
+                    subdir_path = os.path.join(base_path, subdir)
+                    if os.path.exists(subdir_path):
+                        shutil.rmtree(subdir_path)
+
+                # Special handling for integrationtests: delete only ECP files
+                its_dir = os.path.join(base_path, "integrationtests")
+                if os.path.exists(its_dir):
+                    ecp_files_deleted = 0
+                    non_ecp_files_kept = 0
+
+                    for filename in os.listdir(its_dir):
+                        if filename.endswith(".yaml") and filename != "kustomization.yaml":
+                            if "ecp" in filename:
+                                file_path = os.path.join(its_dir, filename)
+                                os.remove(file_path)
+                                ecp_files_deleted += 1
+                            else:
+                                non_ecp_files_kept += 1
+
+                    # Remove kustomization.yaml (will be regenerated with all files)
+                    kustomization_path = os.path.join(its_dir, "kustomization.yaml")
+                    if os.path.exists(kustomization_path):
+                        os.remove(kustomization_path)
+
+                    if ecp_files_deleted > 0 or non_ecp_files_kept > 0:
+                        msg_parts = []
+                        if ecp_files_deleted > 0:
+                            msg_parts.append(f"removed {ecp_files_deleted} ECP test(s)")
+                        if non_ecp_files_kept > 0:
+                            msg_parts.append(f"kept {non_ecp_files_kept} non-ECP test(s)")
+                        print(f"    integrationtests/: {', '.join(msg_parts)}")
+
+            print()
+
+    # Second pass: Generate all resources
+    for definition in definitions:
         tenant = definition["tenant"]
         app_name = definition["application"]
 
@@ -401,11 +528,6 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             app_name,
             normalized_branch,
         )
-
-        # Remove base_path if recreate flag is set
-        if recreate and os.path.exists(base_path):
-            print(f"Removing existing directory: {base_path}")
-            shutil.rmtree(base_path)
 
         apps_dir = os.path.join(base_path, "applications")
         components_dir = os.path.join(base_path, "components")
@@ -476,6 +598,12 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             else:
                 rpa_name = f"{base_rpa_name}-{normalized_branch}"
 
+            # Collect component names for autorelease annotation
+            component_names = [
+                get_component_name(comp["name"], branch)
+                for comp in definition.get("components", [])
+            ]
+
             rp_content = rp_template.render(
                 application_name=versioned_app_name,
                 release_plan_name=rp_name,
@@ -483,6 +611,9 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 release_plan_grace_period=rp["grace_period"],
                 release_plan_admission_name=rpa_name,
                 tenant_name=tenant,
+                autorelease_annotation=rp.get("autorelease_annotation", False),
+                author=rp.get("author"),
+                components=component_names,
             )
             rp_filename = f"{rp_name}.yaml"
             write_with_newline(os.path.join(releaseplans_dir, rp_filename), rp_content)
@@ -547,8 +678,13 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 elif not is_tech_preview_rpa and is_tech_preview_component:
                     continue  # Skip tech-preview components for regular prod RPA
 
-                # For prod RPAs (non-stage), skip components without prod_repository
-                if not is_stage_rpa and "prod_repository" not in component:
+                # For prod RPAs (non-stage), skip full-container components without prod_repository
+                # Disk-image components use rpa_values instead and don't need prod_repository
+                if (
+                    not is_stage_rpa
+                    and rpa_pipeline_type == "full-container"
+                    and "prod_repository" not in component
+                ):
                     continue
 
                 updated_component = component.copy()
@@ -614,18 +750,24 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             if its_config and its_config.get("enabled", False):
                 its_template = env.get_template("integrationtestscenario.yaml.j2")
 
-                # Determine stage/prod from RPA name for the ITS name suffix
+                # Determine stage/prod from RPA name and construct ITS name
+                # Remove stage/prod suffix from base name to avoid duplication
+                its_base_name = base_rpa_name
                 if "stage" in base_rpa_name.lower() or "staging" in base_rpa_name.lower():
                     its_suffix = "check-stage-ecp"
+                    # Strip -stage or -staging suffix
+                    its_base_name = base_rpa_name.rsplit("-stage", 1)[0].rsplit("-staging", 1)[0]
                 elif "prod" in base_rpa_name.lower():
                     its_suffix = "check-prod-ecp"
+                    # Strip -prod suffix
+                    its_base_name = base_rpa_name.rsplit("-prod", 1)[0]
                 else:
                     its_suffix = "check-ecp"
 
                 if branch == "main":
-                    its_name = f"{base_rpa_name}-{its_suffix}"
+                    its_name = f"{its_base_name}-{its_suffix}"
                 else:
-                    its_name = f"{base_rpa_name}-{normalized_branch}-{its_suffix}"
+                    its_name = f"{its_base_name}-{normalized_branch}-{its_suffix}"
 
                 # Build policy_configuration from tenant and policy
                 policy_configuration = f"rhtap-releng-tenant/{rpa['policy']}"
@@ -652,6 +794,19 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 integrationtest_files.append(its_filename)
 
                 print(f"Generated IntegrationTestScenario '{its_name}' at {its_filepath}")
+
+        # Include any existing non-ECP integration tests in kustomization
+        # These files were preserved during --recreate by not deleting them
+        if os.path.exists(integrationtests_dir):
+            for filename in sorted(os.listdir(integrationtests_dir)):
+                if (
+                    filename.endswith(".yaml")
+                    and filename != "kustomization.yaml"
+                    and filename not in integrationtest_files
+                ):
+                    # This is a non-ECP test that exists on disk
+                    integrationtest_files.append(filename)
+                    print(f"Including existing non-ECP test '{filename}' in kustomization")
 
         if releaseplan_files:
             create_kustomization(releaseplans_dir, releaseplan_files, tenant)
@@ -723,12 +878,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    # Required arguments
+    # Config file arguments
     parser.add_argument(
         "--config",
-        required=True,
+        action="append",
+        type=str,
+        dest="config_patterns",
+        help="Path or glob pattern for config file(s) (e.g., 'configs/*.yaml'). Can be specified multiple times.",
+    )
+
+    parser.add_argument(
+        "--config-dir",
         type=Path,
-        help="Path to the product configuration YAML file",
+        help="Directory containing multiple config YAML files. Processes all *.yaml files.",
     )
 
     # Mode selection
@@ -790,6 +952,10 @@ def main():
 
     args = parser.parse_args()
 
+    # Validate that at least one config source is provided
+    if not args.config_patterns and not args.config_dir:
+        parser.error("At least one of --config or --config-dir must be specified")
+
     # Load configuration with hierarchical priority
     config = Config(
         config_file=args.settings,
@@ -802,15 +968,35 @@ def main():
         },
     )
 
-    # Load product data from YAML
-    with open(args.config) as f:
-        data = yaml.load(f)
+    # Collect all config files
+    config_files = collect_config_files(args.config_patterns, args.config_dir)
+
+    print(f"Processing {len(config_files)} configuration file(s):")
+    for cf in config_files:
+        print(f"  - {cf}")
+
+    # Load and merge all definitions
+    all_definitions = []
+    for config_file in config_files:
+        try:
+            with open(config_file) as f:
+                data = yaml.load(f)
+                definitions = data.get("definitions", [])
+                all_definitions.extend(definitions)
+                print(f"  Loaded {len(definitions)} definition(s) from {config_file.name}")
+        except Exception as e:
+            print(f"  Error loading {config_file}: {e}")
+            raise
+
+    # Create merged data structure
+    merged_data = {"definitions": all_definitions}
+    print(f"\nTotal: {len(all_definitions)} definition(s) to process\n")
 
     # Generate resources based on mode
     if args.mode in ["krd", "both"]:
         print(f"Generating KRD templates to {config['krd_path']}")
         render_krd_templates(
-            data,
+            merged_data,
             str(config["krd_template_dir"]),
             str(config["krd_path"]),
             config["cluster"],
@@ -820,7 +1006,7 @@ def main():
     if args.mode in ["pipelinerun", "both"]:
         print(f"Generating pipelinerun templates to {config['gitlab_repo_path']}")
         render_pipelinerun_templates(
-            data,
+            merged_data,
             str(config["pipelinerun_template_dir"]),
             str(config["gitlab_repo_path"]),
         )

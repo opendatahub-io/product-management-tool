@@ -4,10 +4,10 @@ kind: ReleasePlan
 metadata:
   labels:
     release.appstudio.openshift.io/auto-release: "false"
-    release.appstudio.openshift.io/standing-attribution: "true"
     release.appstudio.openshift.io/releasePlanAdmission: "test-release-plan-prod-test-branch-1-0"
-  namespace: test-tenant
+    release.appstudio.openshift.io/standing-attribution: "true"
   name: test-release-plan-prod-test-branch-1-0
+  namespace: test-tenant
 spec:
   application: test-full-container-test-branch-1-0
   releaseGracePeriodDays: 30

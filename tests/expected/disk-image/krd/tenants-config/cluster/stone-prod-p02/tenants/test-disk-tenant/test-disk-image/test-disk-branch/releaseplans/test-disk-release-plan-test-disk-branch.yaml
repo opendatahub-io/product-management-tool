@@ -4,10 +4,10 @@ kind: ReleasePlan
 metadata:
   labels:
     release.appstudio.openshift.io/auto-release: "true"
-    release.appstudio.openshift.io/standing-attribution: "true"
     release.appstudio.openshift.io/releasePlanAdmission: "test-disk-release-plan-test-disk-branch"
-  namespace: test-disk-tenant
+    release.appstudio.openshift.io/standing-attribution: "true"
   name: test-disk-release-plan-test-disk-branch
+  namespace: test-disk-tenant
 spec:
   application: test-disk-image-test-disk-branch
   releaseGracePeriodDays: 14

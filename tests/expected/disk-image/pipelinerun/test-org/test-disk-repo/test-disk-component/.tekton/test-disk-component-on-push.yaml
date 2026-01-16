@@ -3,8 +3,8 @@ kind: PipelineRun
 metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://gitlab.com/test-org/test-disk-repo/test-disk-component/-/tree/{{revision}}
-    build.appstudio.redhat.com/commit_sha: '{{revision}}'
-    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    build.appstudio.redhat.com/commit_sha: "{{revision}}"
+    build.appstudio.redhat.com/target_branch: "{{target_branch}}"
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
@@ -22,9 +22,9 @@ spec:
     tasks: "6h0m0s"
   params:
   - name: git-url
-    value: '{{source_url}}'
+    value: "{{source_url}}"
   - name: revision
-    value: '{{revision}}'
+    value: "{{revision}}"
   - name: output-image
     value: quay.io/redhat-user-workloads/test-disk-tenant/test-disk-image-test-disk-branch/test-disk-component-test-disk-branch:{{revision}}
   - name: path-context
@@ -67,4 +67,4 @@ spec:
   workspaces:
   - name: git-auth
     secret:
-      secretName: '{{ git_auth_secret }}'
+      secretName: "{{ git_auth_secret }}"

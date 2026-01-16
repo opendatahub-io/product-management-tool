@@ -87,14 +87,26 @@ Product configurations are maintained in a separate repository: https://gitlab.c
 # Clone the configs repository (if not already cloned)
 git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs.git
 
-# Generate both KRD and pipelinerun resources
+# Single config file (traditional)
 uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/llama-stack/llama-stack-rhoai-2-23.yaml
 
-# Generate only KRD resources
-uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode krd
+# Multiple configs with glob patterns
+uv run python onboard-product.py --config "/path/to/configs/*.yaml"
+uv run python onboard-product.py --config "configs/app-*.yaml" --config "configs/service-*.yaml"
 
-# Generate only pipelinerun resources
-uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode pipelinerun
+# Process entire directory
+uv run python onboard-product.py --config-dir /path/to/configs/llama-stack/
+
+# Combined approach
+uv run python onboard-product.py --config critical.yaml --config "optional-*.yaml" --config-dir shared/
+
+# With --recreate to avoid orphaning resources
+uv run python onboard-product.py --config-dir /path/to/configs/ --recreate
+
+# Mode options
+uv run python onboard-product.py --config config.yaml --mode krd          # Only KRD
+uv run python onboard-product.py --config config.yaml --mode pipelinerun  # Only pipelinerun
+uv run python onboard-product.py --config config.yaml --mode both         # Both (default)
 ```
 
 ## Architecture Notes
@@ -120,11 +132,24 @@ uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-conf
 
 ### Testing Strategy
 - End-to-end regression tests in `tests/test_generation.py`
-- Two comprehensive test configs: `tests/configs/test-full-container.yaml` and `tests/configs/test-disk-image.yaml`
+- Two test classes:
+  - `TestGeneration`: Tests single-config scenarios (backward compatibility)
+  - `TestMultiConfig`: Tests multi-config scenarios (glob patterns, --config-dir)
+- Test configs:
+  - `tests/configs/test-full-container.yaml` - Full container pipeline test
+  - `tests/configs/test-disk-image.yaml` - Disk image pipeline test
+  - `tests/configs/multi-config-test/` - Directory with 3 minimal configs for multi-config tests
 - Expected outputs stored in `tests/expected/{pipeline-type}/{krd,pipelinerun}/`
 - Tests generate output to temporary directories and compare with expected files
 - Parametrized tests for both pipeline types (full-container and disk-image)
-- Tests cover KRD generation, pipelinerun generation, and end-to-end scenarios
+- Tests cover KRD generation, pipelinerun generation, end-to-end scenarios, and multi-config processing
+
+**Adding new tests:**
+1. For new features affecting output, add to `TestGeneration` class
+2. For new config handling features, add to `TestMultiConfig` class
+3. Use `setup_method()` to create temp directories, `teardown_method()` to clean up
+4. Import functions from onboard-product.py via importlib (due to dash in filename)
+5. Use `compare_directories()` helper to check output matches expected
 
 ### Configuration
 Environment variables for paths:
@@ -204,3 +229,280 @@ Pipelinerun resources as:
   - `build_args_file`, `additional_build_secret`, `variant`, `skip-checks`
 - **Disk-Image Specific**: Uses hardcoded values for `image-type: iso`, `config-toml: config/config-iso.toml`, `bib-file: bib.yaml`
 - All paths are relative to the component repository root
+
+## Code Structure and Key Functions
+
+### Main Entry Point (main() function)
+Located at line ~740-910 in onboard-product.py:
+1. **Argument parsing** (lines 768-850): Sets up CLI arguments including --config, --config-dir, --mode, --recreate, etc.
+2. **Config validation** (lines 848-850): Ensures at least one of --config or --config-dir is specified
+3. **Configuration loading** (lines 852-862): Loads tool configuration (paths, cluster) from CLI, env vars, or TOML file
+4. **Config file collection** (lines 864-886): Calls collect_config_files(), loads YAML, merges definitions
+5. **Resource generation** (lines 888-905): Calls render_krd_templates() and/or render_pipelinerun_templates() based on mode
+
+### Key Helper Functions
+
+**collect_config_files(config_patterns, config_dir)** - Lines 113-160
+- Collects config files from glob patterns and/or directory
+- Handles both --config patterns (can be globs or literal paths) and --config-dir
+- Uses `glob.glob()` with recursive=True for pattern matching
+- Resolves all paths to absolute using `.resolve()` to detect duplicates
+- Filters out hidden files (starting with `.`, `_`, `~`) from directories
+- Returns sorted list of unique Path objects
+- Raises ValueError if no configs found or directory doesn't exist
+
+**render_krd_templates(data, template_dir, krd_path, cluster, recreate)** - Lines 393-729
+- Processes `definitions` array from merged config data
+- For each definition, extracts tenant, application, branch
+- **Key behavior with --recreate** (lines 436-501): Selective deletion approach
+  - Deletes managed subdirectories: `applications/`, `components/`, `imagerepositories/`, `releaseplans/`
+  - For `integrationtests/`: Deletes only ECP test files (containing "ecp"), preserves non-ECP tests
+  - Removes `kustomization.yaml` (regenerated at the end)
+- Creates directory structure: applications/, components/, imagerepositories/, releaseplans/, integrationtests/ (conditional)
+- Generates Application resource (one per application)
+- Generates Component and ImageRepository resources (one per component)
+- Generates ReleasePlan resources (supports `autorelease_annotation` and `author` fields)
+- Generates ReleasePlanAdmission resources in separate directory tree
+- **Component filtering for prod RPAs** (lines 645-647): Skips components without `prod_repository` for production RPAs
+- **Integration tests** (lines 727-769): Only creates integrationtests/ directory when ITS is configured
+- **Non-ECP test inclusion** (lines 771-778): Scans for existing non-ECP tests and includes in kustomization
+- Uses `get_directory_resources()` for dynamic kustomization.yaml generation
+
+**render_pipelinerun_templates(data, template_dir, gitlab_repo_path)** - Lines 277-390
+- Generates .tekton/ files in component repositories
+- For each component, determines tekton_dir from local_repo_path or parsed GitLab URL
+- Generates two pipelinerun files per component: -on-pull-request.yaml and -on-push.yaml
+- Template selection based on pipeline type (full-container.yaml.j2 or disk-image.yaml.j2)
+- Uses base_component_name (not versioned) for pipelinerun filenames
+
+**get_application_name(base_name, branch)** - Lines 163-187
+- Returns base_name for "main" branch
+- Returns "{base_name}-{normalized_branch}" for other branches
+- Example: "llama-stack" on "main" → "llama-stack", on "rhoai-2.23" → "llama-stack-rhoai-2-23"
+
+**get_component_name(base_name, branch)** - Lines 189-208
+- Same logic as get_application_name but for components
+- Ensures component names match their application versions
+
+**canonicalize(value)** - Lines 44-46
+- Converts dots to dashes for filename-safe names
+- Used for branch names: "rhoai-2.23" → "rhoai-2-23"
+
+**create_kustomization(directory, files, tenant)** - Lines 50-82
+- Creates or updates kustomization.yaml in a directory
+- Merges with existing resources if file exists
+- Used for applications/, components/, imagerepositories/, releaseplans/, integrationtests/ directories
+
+**get_directory_resources(directory)** - Lines 99-110
+- Scans directory for files/folders to include in kustomization
+- Filters out hidden files and kustomization.yaml itself
+- Returns sorted list of resource names
+- Used to dynamically generate base_path kustomization.yaml (avoids hardcoded integrationtests entry)
+
+### Important Implementation Details
+
+**Multi-Config Merge Logic** (lines 864-886):
+```python
+# Collect all config files
+config_files = collect_config_files(args.config_patterns, args.config_dir)
+
+# Load and merge definitions from all configs
+all_definitions = []
+for config_file in config_files:
+    data = yaml.load(f)
+    definitions = data.get("definitions", [])
+    all_definitions.extend(definitions)
+
+# Create merged data structure
+merged_data = {"definitions": all_definitions}
+```
+- Concatenates definitions arrays from all config files
+- No conflict detection needed per user requirement (each config defines unique tenant/app/branch)
+- Single pass through render functions processes all definitions
+
+**--recreate Flag: Selective Deletion** (lines 436-501):
+```python
+# Deletes managed subdirectories
+subdirs_to_delete = ["applications", "components",
+                     "imagerepositories", "releaseplans"]
+for subdir in subdirs_to_delete:
+    subdir_path = os.path.join(base_path, subdir)
+    if os.path.exists(subdir_path):
+        shutil.rmtree(subdir_path)
+
+# Special handling for integrationtests: delete only ECP files
+for filename in os.listdir(its_dir):
+    if filename.endswith(".yaml") and filename != "kustomization.yaml":
+        if "ecp" in filename:
+            os.remove(file_path)  # Delete ECP tests
+        # Keep non-ECP tests
+```
+- Selectively deletes managed subdirectories within `{tenant}/{app}/{branch}/`
+- Does NOT delete entire application directory
+- Preserves non-ECP integration tests (files without "ecp" in name)
+- Safe to use with multi-config - only removes managed resources being regenerated
+
+**Component Filtering for Prod RPAs** (lines 545-547):
+```python
+# For prod RPAs (non-stage), skip components without prod_repository
+if not is_stage_rpa and "prod_repository" not in component:
+    continue
+```
+- Stage RPAs include all components regardless of repository config
+- Prod RPAs only include components with `prod_repository` field
+- Prevents incomplete production releases
+
+**Conditional IntegrationTests Directory** (lines 648-649, 664-667):
+- Directory only created when `integration_test_scenario.enabled: true` in RPA config
+- Uses `get_directory_resources()` to dynamically build kustomization resources
+- No hardcoded "integrationtests" entry in kustomization.yaml
+
+### Branch-Aware Naming Pattern
+Every definition processes branch to create versioned names:
+```python
+branch, normalized_branch, versioned_app_name = get_branch_info(definition)
+# branch = "rhoai-2.23" (original)
+# normalized_branch = "rhoai-2-23" (canonicalized)
+# versioned_app_name = "llama-stack-rhoai-2-23" (if not main)
+```
+
+Used for:
+- Application name: `versioned_app_name`
+- Component names: `get_component_name(base_name, branch)`
+- Directory structure: `{app_name}/{normalized_branch}/`
+- Release plan names: `{base_name}-{normalized_branch}` (if not main)
+
+### Template Rendering
+- Jinja2 with custom delimiters `[[` and `]]` to avoid YAML conflicts
+- Template loading: `env = create_jinja_env(template_dir)`
+- Rendering: `template.render(**params)` with specific parameters per resource type
+- All rendered content written with trailing newline via `write_with_newline()`
+
+### Error Handling Patterns
+- Config file collection raises ValueError with descriptive messages
+- Template rendering errors propagate with file context
+- Path validation before directory operations
+- Informative print statements for debugging (which files loaded, how many definitions, etc.)
+
+## Common Modification Patterns
+
+### Adding a New CLI Argument
+1. Add parser argument in main() around line 768-840
+2. Add to cli_overrides dict when creating Config object (line 853-862)
+3. Use via `args.your_arg` or `config['your_arg']`
+
+### Adding a New Resource Type
+1. Create Jinja2 template in templates/KRD/ with `[[` `]]` delimiters
+2. Add directory creation in render_krd_templates() (like apps_dir, components_dir)
+3. Load template: `template = env.get_template("yourresource.yaml.j2")`
+4. Render with appropriate parameters
+5. Add to kustomization via `create_kustomization()` or `get_directory_resources()`
+
+### Modifying Component Filtering Logic
+- See lines 525-577 in render_krd_templates() for RPA component filtering
+- Current filters: tech_preview, stage vs prod, prod_repository availability
+- Add new filters in the component iteration loop before `updated_components.append()`
+
+### Changing Output Directory Structure
+- KRD base_path defined at lines 392-401
+- Modify path components in os.path.join() chain
+- Update kustomization creation calls to match new structure
+- Regenerate test expected outputs
+
+### Adding Config Validation
+- Add validation in main() after loading merged_data (around line 886)
+- Check for required fields, valid combinations, etc.
+- Raise ValueError with descriptive message
+- Consider adding validation helper functions
+
+## Recent Feature Additions
+
+### Multi-Config Support (AIPCC-8593)
+**Problem solved**: Using `--recreate` with single config orphaned resources from other configs sharing same application.
+
+**Changes made**:
+1. Added glob pattern support to `--config` argument
+2. Added new `--config-dir` option to process all YAML files in a directory
+3. Implemented config merging logic to process multiple configs in single run
+4. Updated argument parsing to support `action="append"` for multiple --config flags
+5. Added `collect_config_files()` helper function with duplicate detection via path resolution
+
+**Key implementation**:
+- `--config` now accepts glob patterns like `"configs/*.yaml"` (quotes prevent shell expansion)
+- Multiple `--config` flags can be combined: `--config "app-*.yaml" --config "service-*.yaml"`
+- `--config-dir` processes all .yaml files in directory (filters hidden files)
+- All approaches can be combined: `--config file.yaml --config "*.yaml" --config-dir dir/`
+- Definitions from all configs merged into single array before processing
+- Safe with `--recreate` - only removes directories for apps being regenerated
+
+**Testing**:
+- Added `tests/configs/multi-config-test/` with 3 minimal test configs
+- Added `TestMultiConfig` class with 7 tests for glob, dir, combined, duplicates, errors
+- All existing tests still pass (backward compatibility verified)
+
+### Component Filtering & Conditional Directories (AIPCC-8593)
+**Prod repository filtering**:
+- Components without `prod_repository` field automatically excluded from production RPAs
+- Stage RPAs include all components regardless
+- Prevents incomplete production releases
+
+**Conditional integrationtests directory**:
+- Only created when `integration_test_scenario.enabled: true` in RPA config
+- Uses dynamic `get_directory_resources()` instead of hardcoded kustomization entry
+- Keeps output clean when integration tests not configured
+
+**--recreate flag (updated to selective deletion)**:
+- Selectively deletes managed subdirectories: applications/, components/, imagerepositories/, releaseplans/
+- For integrationtests/: Deletes only ECP test files, preserves non-ECP tests
+- Prevents orphaned component/imagerepository files when components removed from config
+- Scoped deletion - only removes managed resources, not entire application directory
+
+### Recent Improvements (2025-01)
+
+**ReleasePlan autorelease annotation support**:
+- Added `autorelease_annotation` boolean field to release_plan configuration
+- When `true`: Generates annotation with component list: `UpdatedComponentIs('comp1') || UpdatedComponentIs('comp2')`
+- When `false` (default): Generates label with boolean value
+- Added `author` optional field for release plan author label
+- Template: `templates/KRD/releaseplan.yaml.j2`
+
+**IntegrationTestScenario naming improvement**:
+- Fixed duplicate stage/prod in ITS names (e.g., `bootc-containers-stage-check-stage-ecp`)
+- Now strips stage/prod suffix from base name before adding check suffix
+- Result: `bootc-containers-check-stage-ecp` (cleaner, no duplication)
+- Implementation: Lines 732-749 in render_krd_templates()
+
+**Template quote unification**:
+- Unified all templates to use double quotes consistently
+- Changed from mixed single/double quotes to double quotes only
+- Affects all 8 templates in templates/KRD/ and templates/pipelinerun/
+- Improves consistency and readability
+
+## Troubleshooting Common Issues
+
+### Tests fail after code changes
+1. Check if output format changed (intentionally or not)
+2. If intentional, regenerate expected outputs (see "Updating Expected Test Outputs")
+3. If unintentional, review code changes for bugs
+4. Run single test with `-v` flag to see detailed diff
+
+### Glob patterns not matching files
+1. Use quotes around glob patterns: `--config "*.yaml"` not `--config *.yaml`
+2. Check if shell is expanding pattern before script sees it
+3. Use absolute paths or paths relative to current directory
+4. Test pattern with `ls` command first: `ls configs/*.yaml`
+
+### --recreate deleting too much / too little
+- Deletes only `{tenant}/{app}/{branch}/` directory, check your config's tenant/app/branch values
+- Multiple configs with same tenant/app/branch will conflict (last one wins)
+- Use `--config-dir` with all related configs to process together
+
+### Import errors in tests
+- onboard-product.py has dash in filename, must use importlib
+- See existing test setup for import pattern
+- Import functions individually: `render_krd_templates = onboard_product.render_krd_templates`
+
+### Pipelinerun files in wrong location
+- Check `local_repo_path` in component config (overrides GitLab URL parsing)
+- Verify GitLab URL format: `https://gitlab.com/{org}/{repo}`
+- Check GITLAB_REPO_PATH environment variable or --gitlab-path argument

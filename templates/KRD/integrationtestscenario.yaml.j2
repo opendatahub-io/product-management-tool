@@ -2,11 +2,11 @@
 apiVersion: appstudio.redhat.com/v1beta2
 kind: IntegrationTestScenario
 metadata:
-  name: [[ its_name ]]
 {%- if optional %}
   labels:
-    test.appstudio.openshift.io/optional: 'true'
+    test.appstudio.openshift.io/optional: "true"
 {%- endif %}
+  name: [[ its_name ]]
 spec:
   application: [[ application_name ]]
   contexts:
@@ -20,7 +20,7 @@ spec:
     - name: TIMEOUT
       value: [[ timeout ]]
     - name: SINGLE_COMPONENT
-      value: '[[ single_component ]]'
+      value: "[[ single_component ]]"
   resolverRef:
     params:
       - name: url

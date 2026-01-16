@@ -2,12 +2,21 @@
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlan
 metadata:
+{%- if autorelease_annotation %}
+  annotations:
+    release.appstudio.openshift.io/auto-release: "{%- for component in components -%}UpdatedComponentIs('[[ component ]]'){%- if not loop.last %} || {% endif -%}{%- endfor -%}"
+{%- endif %}
   labels:
+{%- if not autorelease_annotation %}
     release.appstudio.openshift.io/auto-release: "[[ release_plan_autorelease ]]"
-    release.appstudio.openshift.io/standing-attribution: "true"
+{%- endif %}
+{%- if author %}
+    release.appstudio.openshift.io/author: [[ author ]]
+{%- endif %}
     release.appstudio.openshift.io/releasePlanAdmission: "[[ release_plan_admission_name ]]"
-  namespace: [[ tenant_name ]]
+    release.appstudio.openshift.io/standing-attribution: "true"
   name: [[ release_plan_name ]]
+  namespace: [[ tenant_name ]]
 spec:
   application: [[ application_name ]]
   releaseGracePeriodDays: [[ release_plan_grace_period ]]

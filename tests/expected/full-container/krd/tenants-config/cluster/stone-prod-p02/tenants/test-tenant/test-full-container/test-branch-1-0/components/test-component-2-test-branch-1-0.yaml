@@ -3,16 +3,16 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: Component
 metadata:
   annotations:
-    git-provider: gitlab
-    git-provider-url: 'https://gitlab.com'
     build.appstudio.openshift.io/request: configure-pac
+    git-provider: gitlab
+    git-provider-url: "https://gitlab.com"
     mintmaker.appstudio.redhat.com/disabled: true
   name: test-component-2-test-branch-1-0
 spec:
   application: test-full-container-test-branch-1-0
   componentName: test-component-2-test-branch-1-0
-  skipGitOpsResourceGeneration: true
   secret: pipelines-as-code-secret
+  skipGitOpsResourceGeneration: true
   source:
     git:
       context: "./test-context-2"

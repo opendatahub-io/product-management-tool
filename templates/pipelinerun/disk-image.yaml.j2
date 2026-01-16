@@ -3,12 +3,12 @@ kind: PipelineRun
 metadata:
   annotations:
     build.appstudio.openshift.io/repo: [[ component_url ]]/-/tree/{{revision}}
-    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/commit_sha: "{{revision}}"
 {%- if pipelinerun_type == "pull" %}
-    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
+    build.appstudio.redhat.com/pull_request_number: "{{pull_request_number}}"
 {%- endif %}
-    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    pipelinesascode.tekton.dev/cancel-in-progress: "{% if pipelinerun_type == 'pull' %}true{% else %}false{% endif %}"
+    build.appstudio.redhat.com/target_branch: "{{target_branch}}"
+    pipelinesascode.tekton.dev/cancel-in-progress: "{% if pipelinerun_type == "pull" %}true{% else %}false{% endif %}"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
 {%- if pipelinerun_type == "pull" %}
@@ -36,9 +36,9 @@ spec:
 {%- endif %}
   params:
   - name: git-url
-    value: '{{source_url}}'
+    value: "{{source_url}}"
   - name: revision
-    value: '{{revision}}'
+    value: "{{revision}}"
   - name: output-image
     value: quay.io/redhat-user-workloads/[[ tenant_name ]]/[[ application_name ]]/[[ component_name ]]:{% if pipelinerun_type == "pull" %}on-pr-{{revision}}{% else %}{{revision}}{% endif %}
 {%- if pipelinerun_type == "pull" %}
@@ -88,4 +88,4 @@ spec:
   workspaces:
   - name: git-auth
     secret:
-      secretName: '{{ git_auth_secret }}'
+      secretName: "{{ git_auth_secret }}"

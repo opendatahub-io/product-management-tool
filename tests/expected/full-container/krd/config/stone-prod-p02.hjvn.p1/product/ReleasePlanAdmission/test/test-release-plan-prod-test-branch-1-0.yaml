@@ -5,8 +5,8 @@ metadata:
   name: test-release-plan-prod-test-branch-1-0
   namespace: rhtap-releng-tenant
   labels:
-    release.appstudio.openshift.io/block-releases: 'false'
     pp.engineering.redhat.com/business-unit: ai
+    release.appstudio.openshift.io/block-releases: "false"
 spec:
   applications:
     - test-full-container-test-branch-1-0

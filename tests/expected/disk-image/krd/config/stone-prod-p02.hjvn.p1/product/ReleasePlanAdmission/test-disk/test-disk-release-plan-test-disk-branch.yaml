@@ -5,8 +5,8 @@ metadata:
   name: test-disk-release-plan-test-disk-branch
   namespace: rhtap-releng-tenant
   labels:
-    release.appstudio.openshift.io/block-releases: 'false'
     pp.engineering.redhat.com/business-unit: ai
+    release.appstudio.openshift.io/block-releases: "false"
 spec:
   applications:
     - test-disk-image-test-disk-branch
@@ -20,15 +20,15 @@ spec:
         - name: test-disk-component-test-disk-branch
           staged:
             destination: test-destination-path
-            version: '1.0.0-test'
+            version: "1.0.0-test"
             files:
               - filename: test-disk-{{ release_timestamp }}-x86_64-boot.iso.gz
                 source: test-install.iso.gz
           contentGateway:
-            productName: Test Disk Image Product
-            productCode: TESTDISK
-            productVersionName: {{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}
-            filePrefix: test-disk-1.0.0
+            productName: "Test Disk Image Product"
+            productCode: "TESTDISK"
+            productVersionName: "{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}"
+            filePrefix: "test-disk-1.0.0"
             contentType: disk-image
       defaults:
         pushSourceContainer: false

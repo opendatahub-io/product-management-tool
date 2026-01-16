@@ -51,6 +51,15 @@ uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-conf
 
 # Generate only pipelinerun resources
 uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode pipelinerun
+
+# Process multiple configs using glob pattern
+uv run python onboard-product.py --config "/path/to/aipcc-product-onboarding-configs/llama-stack/*.yaml"
+
+# Process all configs in a directory
+uv run python onboard-product.py --config-dir /path/to/aipcc-product-onboarding-configs/llama-stack
+
+# Combine multiple patterns and directories
+uv run python onboard-product.py --config "/path/to/configs/app1/*.yaml" --config "/path/to/configs/app2/*.yaml" --config-dir /path/to/configs/shared
 ```
 
 ### Using with Podman/Docker (No Python Required)
@@ -132,6 +141,9 @@ uv run python onboard-product.py \
 ```
 
 Available arguments:
+- `--config` - Path or glob pattern for config file(s) (can be specified multiple times)
+- `--config-dir` - Directory containing multiple config YAML files
+- `--mode` - Generation mode: krd, pipelinerun, or both (default: both)
 - `--krd-path` - Output path for KRD resources
 - `--gitlab-path` - Output path for pipelinerun resources
 - `--templates-dir` - KRD templates directory
@@ -201,7 +213,7 @@ The tool works out of the box with no configuration required!
 
 ### Clean Regeneration with --recreate
 
-The `--recreate` flag removes and recreates tenant folders before generating resources, preventing orphaned files when components are removed from your configuration:
+The `--recreate` flag selectively removes managed resources before regeneration, preventing orphaned files when components are removed from your configuration:
 
 ```bash
 # Clean regeneration - removes old resources first
@@ -213,8 +225,14 @@ uv run python onboard-product.py --config product.yaml --recreate
 - Changed branch names or application structure
 - Want a clean slate matching your current configuration exactly
 
+**How it works:**
+- Selectively deletes managed subdirectories: `applications/`, `components/`, `imagerepositories/`, `releaseplans/`
+- For `integrationtests/`: Deletes only ECP test files (containing "ecp" in filename)
+- **Preserves non-ECP integration tests** that you manually created
+- Regenerates all managed resources from your configuration
+
 **Without --recreate:** Files are merged/updated, deleted components remain in the output
-**With --recreate:** Complete folder is removed and regenerated from scratch
+**With --recreate:** Managed resources are removed and regenerated, non-ECP integration tests preserved
 
 ### Component Filtering for Production Releases
 
@@ -258,6 +276,62 @@ release_plan_admission:
 **When enabled:** Creates `integrationtests/` directory with IntegrationTestScenario resources
 **When disabled/omitted:** No directory created, kustomization.yaml excludes it automatically
 
+### Multi-Config Processing
+
+Process multiple configuration files in a single run to manage related products or avoid orphaning resources with `--recreate`.
+
+**Use cases**:
+- Multiple products sharing a tenant
+- Products with configs in different directories
+- Batch processing all product configs at once
+- Using `--recreate` without orphaning resources from other configs
+
+**Methods**:
+
+**1. Glob Patterns** - Match multiple configs using wildcards:
+```bash
+# All configs in a directory
+uv run python onboard-product.py --config "configs/*.yaml"
+
+# Specific pattern
+uv run python onboard-product.py --config "configs/llama-stack-*.yaml"
+
+# Multiple patterns
+uv run python onboard-product.py --config "configs/app-*.yaml" --config "configs/service-*.yaml"
+```
+
+**2. Directory Processing** - Process all YAML files in a directory:
+```bash
+# Process entire directory
+uv run python onboard-product.py --config-dir configs/llama-stack/
+
+# Automatically filters out hidden files (starting with ., _, or ~)
+```
+
+**3. Combined Approach** - Mix and match for maximum control:
+```bash
+# Specific files + directory + glob patterns
+uv run python onboard-product.py \
+  --config configs/critical-app.yaml \
+  --config "configs/optional-*.yaml" \
+  --config-dir configs/shared/
+```
+
+**How it works**:
+- All matched configs are loaded and their definitions merged
+- Resources generated in a single pass (efficient for `--recreate`)
+- Duplicates automatically removed (same config specified multiple ways)
+- No conflicts if each config defines unique (tenant, application, branch) combinations
+
+**Example with --recreate**:
+```bash
+# Before: Recreating single config orphaned resources from other configs
+uv run python onboard-product.py --config app1.yaml --recreate  # Deletes app1 resources only
+
+# After: Process all configs together - nothing orphaned
+uv run python onboard-product.py --config "configs/*.yaml" --recreate  # Regenerates all apps
+```
+
 ## Configuration Schema
 
 ### Required Fields
@@ -299,12 +373,21 @@ definitions:
 
 ### Optional Fields
 
+**Component-level:**
 - `variant` - Build variant for multi-variant builds
 - `build_platforms` - Target architectures (default: pipeline defaults)
 - `skip-checks` - Bypass quality gates (default: false)
 - `timeouts` - Pipeline execution limits
-- `single_component_mode` - Individual vs bundled releases (default: false)
 - `local_repo_path` - Override GitLab repository path for .tekton file generation
+
+**ReleasePlan-level:**
+- `autorelease_annotation` - Use annotation instead of label for auto-release (default: false)
+  - When `true`: Generates `annotations.release.appstudio.openshift.io/auto-release` with component list
+  - When `false`: Generates `labels.release.appstudio.openshift.io/auto-release` with boolean value
+- `author` - Author label for release plan (e.g., "rhel-ai-team")
+
+**ReleasePlanAdmission-level:**
+- `single_component_mode` - Individual vs bundled releases (default: false)
 
 ## Templates
 

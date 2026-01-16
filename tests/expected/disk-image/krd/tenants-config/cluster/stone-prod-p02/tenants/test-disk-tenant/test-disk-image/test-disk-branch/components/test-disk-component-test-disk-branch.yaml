@@ -3,16 +3,16 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: Component
 metadata:
   annotations:
-    git-provider: gitlab
-    git-provider-url: 'https://gitlab.com'
     build.appstudio.openshift.io/request: configure-pac
+    git-provider: gitlab
+    git-provider-url: "https://gitlab.com"
     mintmaker.appstudio.redhat.com/disabled: true
   name: test-disk-component-test-disk-branch
 spec:
   application: test-disk-image-test-disk-branch
   componentName: test-disk-component-test-disk-branch
-  skipGitOpsResourceGeneration: true
   secret: pipelines-as-code-secret
+  skipGitOpsResourceGeneration: true
   source:
     git:
       context: "./test-disk-context"
