@@ -63,12 +63,23 @@ spec:
     value: [[ path_context ]]
   - name: build-args-file
     value: [[ build_args_file ]]
+{%- if build_args %}
+  - name: build-args
+    value:
+{%- for arg in build_args %}
+    - [[ arg ]]
+{%- endfor %}
+{%- endif %}
 {%- if build_platforms %}
   - name: build-platforms
     value:
 {%- for platform in build_platforms %}
     - [[ platform ]]
 {%- endfor %}
+{%- endif %}
+{%- if squash_build %}
+  - name: squash-build
+    value: "true"
 {%- endif %}
   - name: additional-build-secret
     value: [[ additional_build_secret ]]
@@ -82,6 +93,13 @@ spec:
     value: [[ snyk_org ]]
   - name: add-capabilities
     value: ""
+{%- if labels %}
+  - name: labels
+    value:
+{%- for label in labels %}
+    - [[ label ]]
+{%- endfor %}
+{%- endif %}
   pipelineRef:
     params:
     - name: org

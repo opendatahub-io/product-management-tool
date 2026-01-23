@@ -2,6 +2,12 @@
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
 metadata:
+{%- if annotations %}
+  annotations:
+{%- for key, value in annotations.items() %}
+    [[ key ]]: [[ value ]]
+{%- endfor %}
+{%- endif %}
   name: [[ release_plan_admission_name ]]
   namespace: rhtap-releng-tenant
   labels:
@@ -62,6 +68,9 @@ spec:
       product_version: "[[ product_version ]]"
       product_id: [[ product_id | list ]]
     intention: [[ intention ]]
+{%- if "rh-advisories" in pipeline_path %}
+    enforceContainerFirstSecurityLabels: true
+{%- endif %}
 {%- if is_tech_preview %}
     sign:
       configMapName: "hacbs-signing-pipeline-config-redhatbeta2"

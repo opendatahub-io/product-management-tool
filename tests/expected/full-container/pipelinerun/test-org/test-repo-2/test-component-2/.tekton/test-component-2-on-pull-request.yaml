@@ -58,6 +58,11 @@ spec:
     value: test-snyk-org-uuid-2
   - name: add-capabilities
     value: ""
+  - name: labels
+    value:
+    - name=test-org-prod/test-component-2-prod
+    - com.redhat.component=test-org-prod/test-component-2-prod-container
+    - cpe=cpe:/a:redhat:test_product:1.0::el9
   pipelineRef:
     params:
     - name: org

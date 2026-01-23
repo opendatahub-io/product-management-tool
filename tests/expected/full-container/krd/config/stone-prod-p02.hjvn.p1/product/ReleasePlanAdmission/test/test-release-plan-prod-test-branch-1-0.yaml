@@ -2,6 +2,10 @@
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
 metadata:
+  annotations:
+    stream_name: test-stream
+    cpe_name: test_product
+    rhel_target: el9
   name: test-release-plan-prod-test-branch-1-0
   namespace: rhtap-releng-tenant
   labels:
@@ -24,14 +28,16 @@ spec:
       defaults:
         pushSourceContainer: true
         tags:
-          - "prod-latest"
-          - "prod-{{ timestamp }}"
+          - "latest"
+          - "{{ timestamp }}"
           - "v1.0.0-{{ revision }}"
+          - "stable"
     releaseNotes:
       product_name: Test Product Suite
-      product_version: "1.0.0-test"
+      product_version: "1.0.0"
       product_id: [99999]
     intention: production
+    enforceContainerFirstSecurityLabels: true
   origin: test-tenant
   pipeline:
     pipelineRef:
@@ -42,7 +48,7 @@ spec:
         - name: revision
           value: production
         - name: pathInRepo
-          value: "test/pipelines/test-prod-pipeline.yaml"
+          value: "pipelines/managed/rh-advisories/rh-advisories.yaml"
     serviceAccountName: prod-service-account
     timeouts:
       pipeline: "4h0m0s"

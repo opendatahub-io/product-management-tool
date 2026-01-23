@@ -26,6 +26,8 @@ definitions:
               - linux/s390x
             additional_build_secret: test-registry-secret
             skip-checks: true
+            squash-build: true
+            use_build_args: true
             timeouts:
               pipeline: "3h0m0s"
               tasks: "2h30m0s"
@@ -64,29 +66,32 @@ definitions:
         autorelease: false
     
     release_plan_admission:
-      - name: test-release-plan-stage
-        policy: stage-policy-name
+      common:
+        annotations:
+          stream_name: test-stream
+          cpe_name: test_product
+          rhel_target: el9
         single_component_mode: false
-        service_account: stage-service-account
-        pipeline_path: test/pipelines/test-stage-pipeline.yaml
         tags:
-          - "stage-latest"
-          - "stage-{{ timestamp }}"
-          - "stage-{{ revision }}"
-        product_name: "Test Product Suite"
-        product_version: "1.0.0-test"
-        product_id: [99999]
-        intention: staging
-      - name: test-release-plan-prod
-        policy: prod-policy-name
-        single_component_mode: true
-        service_account: prod-service-account
-        pipeline_path: test/pipelines/test-prod-pipeline.yaml
-        tags:
-          - "prod-latest"
-          - "prod-{{ timestamp }}"
+          - "latest"
+          - "{{ timestamp }}"
           - "v1.0.0-{{ revision }}"
         product_name: "Test Product Suite"
-        product_version: "1.0.0-test"
+        product_version: "1.0.0"
         product_id: [99999]
-        intention: production
+      rpas:
+        - name: test-release-plan-stage
+          policy: stage-policy-name
+          service_account: stage-service-account
+          pipeline_path: test/pipelines/test-stage-pipeline.yaml
+          intention: staging
+          tags:
+            - "stage-latest"
+        - name: test-release-plan-prod
+          policy: prod-policy-name
+          single_component_mode: true
+          service_account: prod-service-account
+          pipeline_path: pipelines/managed/rh-advisories/rh-advisories.yaml
+          intention: production
+          tags:
+            - "stable"

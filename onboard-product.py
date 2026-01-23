@@ -205,6 +205,69 @@ def get_component_name(base_name, branch):
         return f"{base_name}-{normalized_branch}"
 
 
+def normalize_rpa_config(rpa_config):
+    """
+    Normalize RPA configuration to support both old and new formats.
+
+    Supports two formats:
+    - Old format: List of RPA dicts directly
+    - New format: Dict with 'common' and 'rpas' keys
+
+    In the new format, common fields are merged with each RPA:
+    - Tags are APPENDED (RPA tags added to common tags)
+    - All other fields are OVERRIDDEN (RPA value replaces common value)
+
+    Args:
+        rpa_config: Either a list of RPAs or a dict with 'common' and 'rpas'
+
+    Returns:
+        list: List of fully merged RPA configurations
+
+    Examples:
+        Old format:
+        [{"name": "stage", "policy": "p1"}, {"name": "prod", "policy": "p2"}]
+        Returns: same list
+
+        New format (tags append):
+        {"common": {"tags": ["v1", "v2"]}, "rpas": [
+            {"name": "stage", "tags": ["stage"]},
+            {"name": "prod", "tags": ["stable"]}
+        ]}
+        Returns: [
+            {"name": "stage", "tags": ["v1", "v2", "stage"]},
+            {"name": "prod", "tags": ["v1", "v2", "stable"]}
+        ]
+
+    Note:
+        TODO: Once all configs are migrated to new format, simplify this function
+        to only handle dict format and remove backward compatibility for list format.
+    """
+    # Old format: direct list of RPAs (backward compatibility)
+    if isinstance(rpa_config, list):
+        return rpa_config
+
+    # New format: dict with common and rpas
+    if isinstance(rpa_config, dict) and "rpas" in rpa_config:
+        common = rpa_config.get("common", {})
+        rpas = rpa_config.get("rpas", [])
+
+        # Merge common with each RPA (RPA overrides common, except tags which append)
+        merged_rpas = []
+        for rpa in rpas:
+            merged_rpa = {**common, **rpa}
+
+            # Special handling for tags: append RPA tags to common tags instead of replacing
+            if "tags" in common and "tags" in rpa:
+                merged_rpa["tags"] = common["tags"] + rpa["tags"]
+
+            merged_rpas.append(merged_rpa)
+
+        return merged_rpas
+
+    # Invalid format, return empty list
+    return []
+
+
 def get_branch_info(definition):
     """
     Extract branch information and calculate versioned names from a product definition.
@@ -273,6 +336,34 @@ def parse_gitlab_url(url):
     return org, repo
 
 
+def extract_repository_name(registry_url):
+    """
+    Extract repository path from a container registry URL.
+
+    Args:
+        registry_url (str): Container registry URL
+                           (e.g., "registry.redhat.io/rhelai3/bootc-cuda-rhel9")
+
+    Returns:
+        str: Repository path without the registry domain
+             (e.g., "rhelai3/bootc-cuda-rhel9")
+
+    Example:
+        extract_repository_name("registry.redhat.io/rhelai3/bootc-cuda-rhel9")
+        returns: "rhelai3/bootc-cuda-rhel9"
+    """
+    # Remove schema if present
+    if "://" in registry_url:
+        registry_url = registry_url.split("://", 1)[1]
+
+    # Split on first slash to separate registry domain from repository path
+    parts = registry_url.split("/", 1)
+    if len(parts) < 2:
+        raise ValueError(f"Invalid registry URL format: {registry_url}")
+
+    return parts[1]
+
+
 def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
     """
     Generate Tekton pipelinerun YAML files for CI/CD automation.
@@ -300,10 +391,46 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
 
         branch, normalized_branch, versioned_app_name = get_branch_info(definition)
 
+        # Construct CPE from prod RPA annotations and product_version
+        # Format: cpe:/a:redhat:{cpe_name}:{major.minor}::{rhel_target}
+        cpe_value = None
+        rpa_config = definition.get("release_plan_admission", [])
+        rpas = normalize_rpa_config(rpa_config)
+        for rpa in rpas:
+            rpa_name = rpa.get("name", "")
+            if "prod" in rpa_name.lower():
+                annotations = rpa.get("annotations", {})
+                if "cpe_name" in annotations and "rhel_target" in annotations:
+                    cpe_name = annotations["cpe_name"]
+                    rhel_target = annotations["rhel_target"]
+                    product_version = rpa.get("product_version", "")
+
+                    # Extract major.minor from product_version (e.g., "3.3" from "3.3.0")
+                    version_parts = product_version.split(".")
+                    if len(version_parts) >= 2:
+                        major_minor = f"{version_parts[0]}.{version_parts[1]}"
+                        cpe_value = f"cpe:/a:redhat:{cpe_name}:{major_minor}::{rhel_target}"
+                break
+
         for component in definition.get("components", []):
             base_component_name = component["name"]
             component_name = get_component_name(base_component_name, branch)
             component_url = component["url"]
+
+            # Build labels array for pipelinerun
+            labels = []
+            if "prod_repository" in component:
+                try:
+                    repo_name = extract_repository_name(component["prod_repository"])
+                    labels.append(f"name={repo_name}")
+                    labels.append(f"com.redhat.component={repo_name}-container")
+                except ValueError as e:
+                    print(
+                        f"Warning: Could not extract repository name from prod_repository for {component_name}: {e}"
+                    )
+
+            if cpe_value:
+                labels.append(f"cpe={cpe_value}")
 
             # Use local_repo_path if provided, otherwise construct from GitLab URL
             if "local_repo_path" in component:
@@ -342,6 +469,19 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                     additional_build_secret = pipelinerun_config["additional_build_secret"]
                     variant = pipelinerun_config.get("variant", "")
                     skip_checks = pipelinerun_config.get("skip-checks", False)
+                    squash_build = pipelinerun_config.get("squash-build", None)
+                    use_build_args = pipelinerun_config.get("use_build_args", False)
+
+                    # Build build_args array if use_build_args is enabled
+                    build_args = []
+                    if use_build_args and "prod_repository" in component:
+                        try:
+                            repo_name = extract_repository_name(component["prod_repository"])
+                            build_args.append(f"NAME={repo_name}")
+                        except ValueError as e:
+                            print(
+                                f"Warning: Could not extract repository name from prod_repository for {component_name}: {e}"
+                            )
                 else:
                     raise ValueError(
                         f"Unknown pipeline type '{pipeline}' for component '{component_name}'. Supported types: 'full-container', 'disk-image'"
@@ -350,6 +490,17 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                 pipeline_template = env.get_template(template_name)
 
                 for pr_type in ["pull", "push"]:
+                    # Filter labels for full-container when use_build_args is true
+                    # (name and component labels move to build-args, only cpe remains)
+                    pipelinerun_labels = labels
+                    if pipeline == "full-container" and use_build_args:
+                        pipelinerun_labels = [
+                            label
+                            for label in labels
+                            if not label.startswith("name=")
+                            and not label.startswith("com.redhat.component=")
+                        ]
+
                     # Prepare template parameters based on pipeline type
                     template_params = {
                         "application_name": versioned_app_name,
@@ -365,6 +516,7 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                         "snyk_project_name": snyk_project_name,
                         "snyk_org": snyk_org,
                         "build_platforms": build_platforms,
+                        "labels": pipelinerun_labels,
                     }
 
                     # Add parameters specific to full-container pipeline
@@ -375,6 +527,8 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                                 "additional_build_secret": additional_build_secret,
                                 "variant": variant,
                                 "skip_checks": skip_checks,
+                                "squash_build": squash_build,
+                                "build_args": build_args,
                             }
                         )
 
@@ -585,6 +739,11 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
 
         releaseplan_files = []
         rp_template = env.get_template("releaseplan.yaml.j2")
+
+        # Normalize RPA config for release plan generation (needed to get RPA names by index)
+        rpa_config_for_rp = definition.get("release_plan_admission", [])
+        rpas_for_rp = normalize_rpa_config(rpa_config_for_rp)
+
         for i, rp in enumerate(definition.get("release_plan", [])):
             base_rp_name = rp["name"]
             if branch == "main":
@@ -592,7 +751,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             else:
                 rp_name = f"{base_rp_name}-{normalized_branch}"
 
-            base_rpa_name = definition.get("release_plan_admission")[i]["name"]
+            base_rpa_name = rpas_for_rp[i]["name"]
             if branch == "main":
                 rpa_name = base_rpa_name
             else:
@@ -633,7 +792,10 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
         )
         ensure_dirs(rpa_base_path)
 
-        for rpa in definition.get("release_plan_admission", []):
+        rpa_config = definition.get("release_plan_admission", [])
+        rpas = normalize_rpa_config(rpa_config)
+
+        for rpa in rpas:
             base_rpa_name = rpa["name"]
             if branch == "main":
                 rpa_name = base_rpa_name
@@ -721,6 +883,9 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
 
                 updated_components.append(updated_component)
 
+            # Extract annotations from RPA config (if present)
+            annotations = rpa.get("annotations", None)
+
             rpa_content = rpa_template.render(
                 application_name=versioned_app_name,
                 release_plan_admission_name=rpa_name,
@@ -737,6 +902,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 pipeline_path=rpa["pipeline_path"],
                 rpa_pipeline_type=rpa_pipeline_type,
                 is_tech_preview=is_tech_preview_rpa,
+                annotations=annotations,
             )
             rpa_filename = f"{rpa_name}.yaml"
             rpa_filepath = os.path.join(rpa_base_path, rpa_filename)
