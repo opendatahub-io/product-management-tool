@@ -1,6 +1,18 @@
+workflow:
+  rules:
+    # Run on merge requests
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Run on main branch
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    # Run on version tags
+    - if: '$CI_COMMIT_TAG'
+
 stages:
-  - test
   - lint
+  - test
+  - build
+  - manifest
+  - release
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -42,3 +54,61 @@ lint:check:
   script:
     - uv run ruff check .
   allow_failure: false
+
+build:
+  stage: build
+  image: registry.access.redhat.com/ubi9/ubi:9.6
+  tags:
+    - ${runner}
+  before_script:
+    - dnf install podman make git -y
+    - podman login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin <<< "$CI_REGISTRY_PASSWORD"
+    - if [[ -n "$CI_MERGE_REQUEST_ID" ]]; then IMAGE_TAG=mr-$CI_MERGE_REQUEST_IID; fi
+  parallel:
+    matrix:
+      - runner: aipcc
+      - runner: aipcc-small-aarch64
+  variables:
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+    IMAGE_REPO: $CI_REGISTRY_IMAGE
+  
+  script:
+    - make build
+    - make push
+
+manifest:
+  stage: manifest
+  image: registry.access.redhat.com/ubi9/ubi:9.6
+  tags:
+    - aipcc
+  before_script:
+    - dnf install podman make git -y
+    - podman login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin <<< "$CI_REGISTRY_PASSWORD"
+    - if [[ -n "$CI_MERGE_REQUEST_ID" ]]; then IMAGE_TAG=mr-$CI_MERGE_REQUEST_IID; fi
+  variables:
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+    IMAGE_REPO: $CI_REGISTRY_IMAGE
+  script:
+    - make manifest-create
+    - make manifest-build
+    - make manifest-push
+    - |
+      if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then 
+        make tag
+        IMAGE_TAG=latest make manifest-push
+      fi
+
+release:
+  stage: release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_TAG
+  image: registry.access.redhat.com/ubi9/ubi:9.6
+  variables:
+    RELEASE_TAG: $CI_COMMIT_TAG
+    IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  before_script:
+    - dnf install make skopeo -y
+    - skopeo login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin <<< "$CI_REGISTRY_PASSWORD"
+    - skopeo login $QUAY_REGISTRY -u $QUAY_REGISTRY_USER --password-stdin <<< "$QUAY_REGISTRY_PASSWORD"
+  script:
+    - make release
