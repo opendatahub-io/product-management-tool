@@ -2,25 +2,25 @@
 apiVersion: appstudio.redhat.com/v1beta2
 kind: IntegrationTestScenario
 metadata:
-{%- if optional %}
   labels:
     test.appstudio.openshift.io/optional: "true"
-{%- endif %}
-  name: [[ its_name ]]
+  name: test-disk-image-test-disk-branch-check-stage-ecp
 spec:
-  application: [[ application_name ]]
+  application: test-disk-image-test-disk-branch
   contexts:
-{%- for component in components %}
-    - description: Component testing for [[ component.name ]]
-      name: component_[[ component.name ]]
-{%- endfor %}
+    - description: Component testing for test-disk-component-test-disk-branch
+      name: component_test-disk-component-test-disk-branch
   params:
     - name: POLICY_CONFIGURATION
-      value: [[ policy_configuration ]]
+      value: "rhtap-releng-tenant/registry-rhel-ai-disk-images-stage"
     - name: TIMEOUT
-      value: [[ timeout ]]
+      value: "40m0s"
     - name: SINGLE_COMPONENT
-      value: "[[ single_component ]]"
+      value: "true"
+    - name: FOO
+      value: true
+    - name: BAR
+      value: 123
   resolverRef:
     params:
       - name: url

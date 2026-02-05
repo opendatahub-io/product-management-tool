@@ -3,8 +3,4 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: test-disk-tenant
 resources:
-  - applications
-  - components
-  - imagerepositories
-  - integrationtests
-  - releaseplans
+  - test-disk-image-test-disk-branch-check-stage-ecp.yaml

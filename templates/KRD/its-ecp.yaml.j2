@@ -1,0 +1,30 @@
+---
+apiVersion: appstudio.redhat.com/v1beta2
+kind: IntegrationTestScenario
+metadata:
+{%- if optional %}
+  labels:
+    test.appstudio.openshift.io/optional: "true"
+{%- endif %}
+  name: [[ its_name ]]
+spec:
+  application: [[ application_name ]]
+  contexts:
+{%- for component in components %}
+    - description: Component testing for [[ component.name ]]
+      name: component_[[ component.name ]]
+{%- endfor %}
+  params:
+{%- for param in params %}
+    - name: [[ param.name ]]
+      value: [[ param.value | yaml_value ]]
+{%- endfor %}
+  resolverRef:
+    params:
+      - name: url
+        value: https://github.com/konflux-ci/build-definitions
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: pipelines/enterprise-contract.yaml
+    resolver: git

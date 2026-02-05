@@ -38,6 +38,24 @@ definitions:
           filePrefix: "test-disk-1.0.0"
           contentType: "disk-image"
     
+    integration_test_scenarios:
+      - template: its-ecp
+        name: test-disk-image-test-disk-branch-check-stage-ecp
+        components:
+          - test-disk-component
+        optional: true
+        params:
+          - name: POLICY_CONFIGURATION
+            value: rhtap-releng-tenant/registry-rhel-ai-disk-images-stage
+          - name: TIMEOUT
+            value: 40m0s
+          - name: SINGLE_COMPONENT
+            value: "true"
+          - name: FOO
+            value: true
+          - name: BAR
+            value: 123
+
     release_plan:
       - name: test-disk-release-plan
         grace_period: 14
@@ -56,3 +74,4 @@ definitions:
         product_version: "1.0.0-disk-test"
         product_id: [77777]
         intention: disk-testing
+

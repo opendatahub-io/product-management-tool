@@ -289,6 +289,31 @@ def get_branch_info(definition):
     return branch, normalized_branch, versioned_app_name
 
 
+def yaml_value(value):
+    """
+    Format a Python value for YAML output, preserving type distinction.
+
+    - Booleans: rendered as lowercase 'true'/'false' (unquoted)
+    - Strings: rendered with double quotes
+    - Numbers: passed through as-is (unquoted)
+    - Other types: converted to quoted string
+
+    Args:
+        value: The value to format
+
+    Returns:
+        The formatted value for YAML
+    """
+    if isinstance(value, bool):
+        return str(value).lower()
+    elif isinstance(value, str):
+        return f'"{value}"'
+    elif isinstance(value, int | float):
+        return value
+    else:
+        return f'"{str(value)}"'
+
+
 def create_jinja_env(template_dir):
     """
     Create standardized Jinja2 environment with custom delimiters.
@@ -302,11 +327,13 @@ def create_jinja_env(template_dir):
     Returns:
         jinja2.Environment: Configured Jinja2 environment
     """
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(template_dir),
         variable_start_string="[[",
         variable_end_string="]]",
     )
+    env.filters["yaml_value"] = yaml_value
+    return env
 
 
 def parse_gitlab_url(url):
@@ -911,55 +938,64 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
 
             print(f"Generated ReleasePlanAdmission '{rpa_name}' at {rpa_filepath}")
 
-            # Generate IntegrationTestScenario if configured
-            its_config = rpa.get("integration_test_scenario")
-            if its_config and its_config.get("enabled", False):
-                its_template = env.get_template("integrationtestscenario.yaml.j2")
+        # Generate IntegrationTestScenario resources from new integration_test_scenarios field
+        its_configs = definition.get("integration_test_scenarios", [])
+        for its_config in its_configs:
+            template_name = its_config.get("template")
+            if not template_name:
+                print("Warning: IntegrationTestScenario config missing 'template' field, skipping")
+                continue
 
-                # Determine stage/prod from RPA name and construct ITS name
-                # Remove stage/prod suffix from base name to avoid duplication
-                its_base_name = base_rpa_name
-                if "stage" in base_rpa_name.lower() or "staging" in base_rpa_name.lower():
-                    its_suffix = "check-stage-ecp"
-                    # Strip -stage or -staging suffix
-                    its_base_name = base_rpa_name.rsplit("-stage", 1)[0].rsplit("-staging", 1)[0]
-                elif "prod" in base_rpa_name.lower():
-                    its_suffix = "check-prod-ecp"
-                    # Strip -prod suffix
-                    its_base_name = base_rpa_name.rsplit("-prod", 1)[0]
-                else:
-                    its_suffix = "check-ecp"
+            # Load the specified template
+            template_file = f"{template_name}.yaml.j2"
+            try:
+                its_template = env.get_template(template_file)
+            except Exception as e:
+                print(f"Warning: Could not load template '{template_file}': {e}, skipping")
+                continue
 
-                if branch == "main":
-                    its_name = f"{its_base_name}-{its_suffix}"
-                else:
-                    its_name = f"{its_base_name}-{normalized_branch}-{its_suffix}"
+            # Get the base name and apply branch-aware naming
+            its_name = its_config.get("name")
+            if not its_name:
+                print("Warning: IntegrationTestScenario config missing 'name' field, skipping")
+                continue
 
-                # Build policy_configuration from tenant and policy
-                policy_configuration = f"rhtap-releng-tenant/{rpa['policy']}"
+            # Prepare component list with branch-aware names
+            # If components not specified, use all components from the definition
+            component_names = its_config.get("components", [])
+            if not component_names:
+                # Use all components from the definition
+                component_names = [comp["name"] for comp in definition.get("components", [])]
+            its_components = [
+                {"name": get_component_name(comp_name, branch)} for comp_name in component_names
+            ]
 
-                # Prepare component list with just names for ITS contexts
-                its_components = [{"name": comp["name"]} for comp in updated_components]
+            # Prepare template parameters (pass all config fields to template)
+            template_params = {
+                "its_name": its_name,
+                "application_name": versioned_app_name,
+                "components": its_components,
+            }
 
-                its_content = its_template.render(
-                    its_name=its_name,
-                    application_name=versioned_app_name,
-                    optional=its_config.get("optional", False),
-                    policy_configuration=policy_configuration,
-                    timeout=its_config.get("timeout", "40m0s"),
-                    single_component=str(its_config.get("single_component", True)).lower(),
-                    components=its_components,
-                )
+            # Add all other fields from the config (except template, name, components)
+            for key, value in its_config.items():
+                if key not in ["template", "name", "components"]:
+                    template_params[key] = value
 
-                # Create integrationtests directory only when needed
-                ensure_dirs(integrationtests_dir)
+            # Render the template
+            its_content = its_template.render(**template_params)
 
-                its_filename = f"{its_name}.yaml"
-                its_filepath = os.path.join(integrationtests_dir, its_filename)
-                write_with_newline(its_filepath, its_content)
-                integrationtest_files.append(its_filename)
+            # Create integrationtests directory only when needed
+            ensure_dirs(integrationtests_dir)
 
-                print(f"Generated IntegrationTestScenario '{its_name}' at {its_filepath}")
+            its_filename = f"{its_name}.yaml"
+            its_filepath = os.path.join(integrationtests_dir, its_filename)
+            write_with_newline(its_filepath, its_content)
+            integrationtest_files.append(its_filename)
+
+            print(
+                f"Generated IntegrationTestScenario '{its_name}' using template '{template_name}' at {its_filepath}"
+            )
 
         # Include any existing non-ECP integration tests in kustomization
         # These files were preserved during --recreate by not deleting them

@@ -1,0 +1,28 @@
+---
+apiVersion: appstudio.redhat.com/v1beta2
+kind: IntegrationTestScenario
+metadata:
+  name: test-full-container-test-branch-1-0-check-prod-ecp
+spec:
+  application: test-full-container-test-branch-1-0
+  contexts:
+    - description: Component testing for test-component-1-test-branch-1-0
+      name: component_test-component-1-test-branch-1-0
+    - description: Component testing for test-component-2-test-branch-1-0
+      name: component_test-component-2-test-branch-1-0
+  params:
+    - name: POLICY_CONFIGURATION
+      value: "rhtap-releng-tenant/registry-rhel-ai-quay-prod"
+    - name: TIMEOUT
+      value: "40m0s"
+    - name: SINGLE_COMPONENT
+      value: "true"
+  resolverRef:
+    params:
+      - name: url
+        value: https://github.com/konflux-ci/build-definitions
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: pipelines/enterprise-contract.yaml
+    resolver: git

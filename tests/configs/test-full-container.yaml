@@ -55,8 +55,33 @@ definitions:
               pipeline: "2h0m0s"
               tasks: "1h30m0s"
               finally: "15m0s"
-    
-    
+
+    integration_test_scenarios:
+      - template: its-ecp
+        name: test-full-container-test-branch-1-0-check-stage-ecp
+        optional: true
+        # field "components" is omitted so it should include all components
+        params:
+          - name: POLICY_CONFIGURATION
+            value: rhtap-releng-tenant/registry-rhel-ai-quay-stage
+          - name: TIMEOUT
+            value: 40m0s
+          - name: SINGLE_COMPONENT
+            value: "true"
+      - template: its-ecp
+        name: test-full-container-test-branch-1-0-check-prod-ecp
+        optional: false
+        components:
+          - test-component-1
+          - test-component-2
+        params:
+          - name: POLICY_CONFIGURATION
+            value: rhtap-releng-tenant/registry-rhel-ai-quay-prod
+          - name: TIMEOUT
+            value: 40m0s
+          - name: SINGLE_COMPONENT
+            value: "true"
+ 
     release_plan:
       - name: test-release-plan-stage
         grace_period: 7
@@ -95,3 +120,4 @@ definitions:
           intention: production
           tags:
             - "stable"
+
