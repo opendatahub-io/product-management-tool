@@ -955,10 +955,18 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 continue
 
             # Get the base name and apply branch-aware naming
-            its_name = its_config.get("name")
-            if not its_name:
+            base_its_name = its_config.get("name")
+            if not base_its_name:
                 print("Warning: IntegrationTestScenario config missing 'name' field, skipping")
                 continue
+
+            # Pattern: {app_name}-{branch}-{its_name}
+            # For main: {app_name}-{its_name}
+            # For branch: {app_name}-{normalized_branch}-{its_name}
+            if branch == "main":
+                its_name = f"{app_name}-{base_its_name}"
+            else:
+                its_name = f"{app_name}-{normalized_branch}-{base_its_name}"
 
             # Prepare component list with branch-aware names
             # If components not specified, use all components from the definition

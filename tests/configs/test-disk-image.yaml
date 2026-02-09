@@ -40,7 +40,7 @@ definitions:
     
     integration_test_scenarios:
       - template: its-ecp
-        name: test-disk-image-test-disk-branch-check-stage-ecp
+        name: check-stage-ecp
         components:
           - test-disk-component
         optional: true

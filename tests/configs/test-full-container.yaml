@@ -58,7 +58,7 @@ definitions:
 
     integration_test_scenarios:
       - template: its-ecp
-        name: test-full-container-test-branch-1-0-check-stage-ecp
+        name: check-stage-ecp
         optional: true
         # field "components" is omitted so it should include all components
         params:
@@ -69,7 +69,7 @@ definitions:
           - name: SINGLE_COMPONENT
             value: "true"
       - template: its-ecp
-        name: test-full-container-test-branch-1-0-check-prod-ecp
+        name: check-prod-ecp
         optional: false
         components:
           - test-component-1
