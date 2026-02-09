@@ -21,10 +21,21 @@ spec:
 {%- endfor %}
   resolverRef:
     params:
-      - name: url
-        value: https://github.com/konflux-ci/build-definitions
+      - name: org
+        value: redhat
+      - name: repo
+        value: rhel-ai/konflux-data
+      - name: scmType
+        value: gitlab
+      - name: serverURL
+        value: https://gitlab.com
       - name: revision
         value: main
       - name: pathInRepo
-        value: [[ path_in_repo if path_in_repo else "pipelines/enterprise-contract.yaml" ]]
+        value: [[ path_in_repo ]]
+      - name: token
+        value: pipelines-as-code-secret
+      - name: tokenKey
+        value: password
     resolver: git
+    resourceKind: pipeline

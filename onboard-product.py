@@ -975,11 +975,12 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 "its_name": its_name,
                 "application_name": versioned_app_name,
                 "components": its_components,
+                "path_in_repo": its_config.get("path_in_repo", ""),
             }
 
-            # Add all other fields from the config (except template, name, components)
+            # Add all other fields from the config (except template, name, components, path_in_repo)
             for key, value in its_config.items():
-                if key not in ["template", "name", "components"]:
+                if key not in ["template", "name", "components", "path_in_repo"]:
                     template_params[key] = value
 
             # Render the template
