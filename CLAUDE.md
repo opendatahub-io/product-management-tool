@@ -113,7 +113,9 @@ uv run python onboard-product.py --config config.yaml --mode both         # Both
 
 ### Template System
 - Uses Jinja2 with custom delimiters `[[` and `]]` to avoid YAML conflicts
-- KRD templates in `templates/KRD/`: application.yaml.j2, component.yaml.j2, imagerepository.yaml.j2, releaseplan.yaml.j2, releaseplanadmission.yaml.j2
+- KRD templates in `templates/KRD/`:
+  - `application.yaml.j2`, `component.yaml.j2`, `imagerepository.yaml.j2`, `releaseplan.yaml.j2`, `releaseplanadmission.yaml.j2`
+  - IntegrationTestScenario templates: `its-ecp.yaml.j2`, `its-konflux-data.yaml.j2`
 - Pipelinerun templates in `templates/pipelinerun/`:
   - `full-container.yaml.j2` - Standard container builds (pathInRepo: pipelines/full-container.yaml)
   - `disk-image.yaml.j2` - Disk image builds (pathInRepo: pipelines/disk-image.yaml)
@@ -166,7 +168,8 @@ KRD resources organized as:
 ├── applications/{app}.yaml
 ├── components/{component}.yaml
 ├── imagerepositories/{component}.yaml
-└── releaseplans/{releaseplan}.yaml
+├── releaseplans/{releaseplan}.yaml
+└── integrationtests/{its_name}.yaml  (optional, only when integration_test_scenarios defined)
 ```
 
 Pipelinerun resources as:
@@ -230,6 +233,66 @@ Pipelinerun resources as:
 - **Disk-Image Specific**: Uses hardcoded values for `image-type: iso`, `config-toml: config/config-iso.toml`, `bib-file: bib.yaml`
 - All paths are relative to the component repository root
 
+### IntegrationTestScenario Configuration
+Integration tests are configured using the `integration_test_scenarios` array in each product definition. The tool generates IntegrationTestScenario resources based on reusable templates.
+
+**Configuration Structure**:
+```yaml
+definitions:
+  - application: my-app
+    # ... other fields ...
+    integration_test_scenarios:
+      - template: its-ecp                    # Required: template name (its-ecp, its-konflux-data)
+        name: check-stage-ecp                # Required: base name for the test
+        optional: true                       # Optional: mark test as optional (default: false)
+        components:                          # Optional: specific components to test (default: all components)
+          - component-1
+          - component-2
+        params:                              # Required: test-specific parameters
+          - name: POLICY_CONFIGURATION
+            value: tenant/policy-name
+          - name: TIMEOUT
+            value: 40m0s
+        # Any other fields are passed through to the template
+```
+
+**Available Templates**:
+- `its-ecp`: Enterprise Contract Policy tests (uses konflux-ci/build-definitions)
+- `its-konflux-data`: Custom GitLab-based tests (uses rhel-ai/konflux-data)
+
+**Branch-Aware Naming**:
+- Main branch: `{app_name}-{its_name}` (e.g., "llama-stack-check-stage-ecp")
+- Other branches: `{app_name}-{normalized_branch}-{its_name}` (e.g., "llama-stack-rhoai-2-23-check-stage-ecp")
+
+**Component Selection**:
+- If `components` field is omitted, all components from the definition are included
+- If specified, only listed components are included (names are automatically versioned for branches)
+
+**Template Parameters** (passed to Jinja2 templates):
+- `its_name`: Generated name with branch suffix
+- `application_name`: Versioned application name
+- `components`: List of component dicts with versioned names
+- `path_in_repo`: Pipeline path from config (default varies by template)
+- All other fields from config (e.g., `optional`, `params`) are passed through
+
+**Output**:
+- Files created in `{tenant}/{app}/{branch}/integrationtests/{its_name}.yaml`
+- Directory only created when scenarios are defined
+- Non-ECP tests (files without "ecp" in name) are preserved during `--recreate`
+
+**Example** (see `tests/configs/test-full-container.yaml` for complete example):
+```yaml
+integration_test_scenarios:
+  - template: its-ecp
+    name: check-stage-ecp
+    optional: true
+    params:
+      - name: POLICY_CONFIGURATION
+        value: tenant/stage-policy
+      - name: SINGLE_COMPONENT
+        value: "true"
+```
+
 ## Code Structure and Key Functions
 
 ### Main Entry Point (main() function)
@@ -251,10 +314,10 @@ Located at line ~740-910 in onboard-product.py:
 - Returns sorted list of unique Path objects
 - Raises ValueError if no configs found or directory doesn't exist
 
-**render_krd_templates(data, template_dir, krd_path, cluster, recreate)** - Lines 393-729
+**render_krd_templates(data, template_dir, krd_path, cluster, recreate)** - Lines 573-1054
 - Processes `definitions` array from merged config data
 - For each definition, extracts tenant, application, branch
-- **Key behavior with --recreate** (lines 436-501): Selective deletion approach
+- **Key behavior with --recreate** (lines 619-689): Selective deletion approach
   - Deletes managed subdirectories: `applications/`, `components/`, `imagerepositories/`, `releaseplans/`
   - For `integrationtests/`: Deletes only ECP test files (containing "ecp"), preserves non-ECP tests
   - Removes `kustomization.yaml` (regenerated at the end)
@@ -263,9 +326,12 @@ Located at line ~740-910 in onboard-product.py:
 - Generates Component and ImageRepository resources (one per component)
 - Generates ReleasePlan resources (supports `autorelease_annotation` and `author` fields)
 - Generates ReleasePlanAdmission resources in separate directory tree
-- **Component filtering for prod RPAs** (lines 645-647): Skips components without `prod_repository` for production RPAs
-- **Integration tests** (lines 727-769): Only creates integrationtests/ directory when ITS is configured
-- **Non-ECP test inclusion** (lines 771-778): Scans for existing non-ECP tests and includes in kustomization
+- **Component filtering for prod RPAs** (lines 870-877): Skips components without `prod_repository` for production RPAs
+- **IntegrationTestScenario generation** (lines 941-1007): Generates ITS from `integration_test_scenarios` array
+  - Only creates integrationtests/ directory when scenarios are defined
+  - Uses template-driven approach (its-ecp.yaml.j2, its-konflux-data.yaml.j2)
+  - Supports branch-aware naming, component filtering, and parameter pass-through
+- **Non-ECP test inclusion** (lines 1009-1020): Scans for existing non-ECP tests and includes in kustomization
 - Uses `get_directory_resources()` for dynamic kustomization.yaml generation
 
 **render_pipelinerun_templates(data, template_dir, gitlab_repo_path)** - Lines 277-390
@@ -352,8 +418,9 @@ if not is_stage_rpa and "prod_repository" not in component:
 - Prod RPAs only include components with `prod_repository` field
 - Prevents incomplete production releases
 
-**Conditional IntegrationTests Directory** (lines 648-649, 664-667):
-- Directory only created when `integration_test_scenario.enabled: true` in RPA config
+**Conditional IntegrationTests Directory** (lines 941-1026):
+- Directory only created when `integration_test_scenarios` array has entries in the definition
+- Uses template-driven generation (its-ecp, its-konflux-data templates)
 - Uses `get_directory_resources()` to dynamically build kustomization resources
 - No hardcoded "integrationtests" entry in kustomization.yaml
 
@@ -447,7 +514,8 @@ Used for:
 - Prevents incomplete production releases
 
 **Conditional integrationtests directory**:
-- Only created when `integration_test_scenario.enabled: true` in RPA config
+- Only created when `integration_test_scenarios` array has entries in the definition
+- Uses template-driven generation (its-ecp, its-konflux-data templates)
 - Uses dynamic `get_directory_resources()` instead of hardcoded kustomization entry
 - Keeps output clean when integration tests not configured
 
@@ -466,16 +534,17 @@ Used for:
 - Added `author` optional field for release plan author label
 - Template: `templates/KRD/releaseplan.yaml.j2`
 
-**IntegrationTestScenario naming improvement**:
-- Fixed duplicate stage/prod in ITS names (e.g., `bootc-containers-stage-check-stage-ecp`)
-- Now strips stage/prod suffix from base name before adding check suffix
-- Result: `bootc-containers-check-stage-ecp` (cleaner, no duplication)
-- Implementation: Lines 732-749 in render_krd_templates()
+**IntegrationTestScenario template-driven generation**:
+- New `integration_test_scenarios` configuration array in product definitions
+- Template-based approach with its-ecp.yaml.j2 and its-konflux-data.yaml.j2
+- Branch-aware naming: `{app}-{branch}-{test_name}` or `{app}-{test_name}` for main
+- Flexible component selection and parameter pass-through
+- Implementation: Lines 941-1007 in render_krd_templates()
 
 **Template quote unification**:
 - Unified all templates to use double quotes consistently
 - Changed from mixed single/double quotes to double quotes only
-- Affects all 8 templates in templates/KRD/ and templates/pipelinerun/
+- Affects all 9 templates: 7 in templates/KRD/ (including 2 ITS templates) and 2 in templates/pipelinerun/
 - Improves consistency and readability
 
 ## Troubleshooting Common Issues

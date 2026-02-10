@@ -259,22 +259,36 @@ components:
     # No prod_repository = excluded from prod RPA
 ```
 
-### Integration Test Directory Management
+### Integration Test Scenarios
 
-The `integrationtests/` directory is only created when integration test scenarios are explicitly configured:
+The `integrationtests/` directory is only created when integration test scenarios are explicitly configured in your product definition:
 
 ```yaml
-release_plan_admission:
-  - name: my-product-stage
+definitions:
+  - application: my-product
     # ... other fields ...
-    integration_test_scenario:
-      enabled: true              # Creates integrationtests/ directory
-      optional: false
-      timeout: "40m0s"
+
+    integration_test_scenarios:
+      - template: its-ecp                    # Template: its-ecp or its-konflux-data
+        name: check-stage-ecp                # Test name (gets branch suffix)
+        optional: true                       # Mark test as optional
+        components:                          # Optional: specific components (default: all)
+          - component-1
+        params:                              # Test-specific parameters
+          - name: POLICY_CONFIGURATION
+            value: tenant/stage-policy
+          - name: TIMEOUT
+            value: 40m0s
 ```
 
-**When enabled:** Creates `integrationtests/` directory with IntegrationTestScenario resources
-**When disabled/omitted:** No directory created, kustomization.yaml excludes it automatically
+**Available templates:**
+- `its-ecp` - Enterprise Contract Policy tests (uses konflux-ci/build-definitions)
+- `its-konflux-data` - Custom GitLab-based tests (uses rhel-ai/konflux-data)
+
+**When configured:** Creates `integrationtests/` directory with IntegrationTestScenario resources
+**When omitted:** No directory created, kustomization.yaml excludes it automatically
+
+**Naming:** Tests are branch-aware - on branch `rhoai-2.23`, test name `check-stage-ecp` becomes `my-product-rhoai-2-23-check-stage-ecp`
 
 ### Multi-Config Processing
 
@@ -398,7 +412,8 @@ definitions:
 - `imagerepository.yaml.j2` - Container image repository
 - `releaseplan.yaml.j2` - Release plan definition
 - `releaseplanadmission.yaml.j2` - Release admission control (supports both full-container and disk-image pipelines)
-- `integrationtestscenario.yaml.j2` - Integration test scenarios
+- `its-ecp.yaml.j2` - Enterprise Contract Policy integration tests
+- `its-konflux-data.yaml.j2` - GitLab-based integration tests
 
 ### Pipelinerun Templates (`templates/pipelinerun/`)
 
