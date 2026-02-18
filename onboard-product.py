@@ -736,6 +736,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             component_config = component.get("component", {})
             build_nudge_enabled = component_config.get("build_nudge_enabled", False)
             build_nudges_ref = component_config.get("build_nudges_ref", [])
+            mintmaker_enabled = component_config.get("mintmaker_enabled", False)
             # Apply branch-aware naming to build nudge references
             build_nudges_ref = [get_component_name(ref, branch) for ref in build_nudges_ref]
 
@@ -748,6 +749,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 component_revision=branch,
                 build_nudge_enabled=build_nudge_enabled,
                 build_nudges_ref=build_nudges_ref,
+                mintmaker_enabled=mintmaker_enabled,
             )
             comp_filename = f"{component_name}.yaml"
             write_with_newline(os.path.join(components_dir, comp_filename), comp_content)

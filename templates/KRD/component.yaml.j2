@@ -9,7 +9,9 @@ metadata:
     build.appstudio.openshift.io/request: configure-pac
     git-provider: gitlab
     git-provider-url: "https://gitlab.com"
+{%- if not mintmaker_enabled %}
     mintmaker.appstudio.redhat.com/disabled: true
+{%- endif %}
   name: [[ component_name ]]
 spec:
   application: [[ application_name ]]

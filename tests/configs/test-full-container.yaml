@@ -12,7 +12,10 @@ definitions:
         url: https://gitlab.com/test-org/test-repo/test-component
         stage_repository: quay.io/test-org/test-component-1-stage
         prod_repository: quay.io/test-org-prod/test-component-1-prod
-        
+
+        component:
+          mintmaker_enabled: true
+
         pipelinerun:
           - build_args_file: test-args/build.conf
             pipeline: full-container
