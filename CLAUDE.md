@@ -199,7 +199,7 @@ Pipelinerun resources as:
   - `disk-image`: Disk image release with CDN staging and content gateway configuration
 - **Disk-Image Specific Requirements**:
   - Components must include `rpa_values` section with required fields
-  - Required fields: `destination`, `version`, `filename`, `source`, `productName`, `productCode`, `productVersionName`, `filePrefix`
+  - Required fields: `destination`, `version`, `filename`, `source`, `productName`, `productCode`, `productVersion`, `filePrefix`
   - Optional field: `contentType` (defaults to "disk-image")
   - RPA includes `cdn: env` section (stage/prod based on RPA name)
   - No `defaults` section or repository mappings

@@ -1,6 +1,6 @@
-# AIPCC Product management
+# AIPCC Product Management
 
-Automated tools for management new products to the Konflux platform. This tool generates Kubernetes resources and CI/CD configurations needed to integrate products with Red Hat's build and release infrastructure.
+Automated tools for onboarding new products to the Konflux platform. Given a product's source repository and registry destinations, this tool generates all the Kubernetes resources and CI/CD configurations needed to get builds and releases running.
 
 ## Features
 
@@ -9,8 +9,9 @@ Automated tools for management new products to the Konflux platform. This tool g
 - **Multi-Pipeline Support**: Supports both full-container and disk-image pipeline types
 - **Branch-Aware**: Supports separate configurations for main development and maintenance branches
 - **Template-Based**: Uses Jinja2 templates for flexible resource generation
-- **Flexible Configuration**: Configure via CLI arguments, TOML files, environment variables, or use sensible defaults
-- **Smart Component Filtering**: Automatically filters components in production ReleasePlanAdmissions based on `prod_repository` availability
+- **Flexible Configuration**: Configure via CLI arguments, TOML files, environment variables, or sensible defaults
+- **Smart Component Filtering**: Automatically separates tech-preview from GA components in ReleasePlanAdmissions, and skips components without `prod_repository` from production RPAs
+- **CPE Label Injection**: Automatically generates CPE labels for pipelinerun files from prod RPA annotation data
 - **Clean Regeneration**: `--recreate` flag removes old resources before generation to prevent orphaned files
 - **Conditional Integration Tests**: Only creates `integrationtests/` directory when integration test scenarios are configured
 
@@ -64,14 +65,17 @@ uv run python onboard-product.py --config "/path/to/configs/app1/*.yaml" --confi
 
 ### Using with Podman/Docker (No Python Required)
 
-If you don't have Python installed, you can use the containerized version:
+A pre-built container image is published automatically from the main branch:
+
+- **GitLab Registry**: `registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest`
+- **Quay.io**: `quay.io/aipcc-cicd/aipcc-product-management:latest`
 
 ```bash
 # Clone the configs repository (if not already cloned)
 git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs.git
 
-# Build the container image
-podman build -t onboard-product:latest .
+# Pull the pre-built image
+podman pull registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest
 
 # Generate both KRD and pipelinerun resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
@@ -80,7 +84,7 @@ podman run --rm --userns=keep-id:uid=1001,gid=1001 \
   -v /path/to/gitlab-repos:/repos \
   -e KRD_PATH=/krd \
   -e GITLAB_REPO_PATH=/repos \
-  onboard-product:latest \
+  registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest \
   --config /configs/llama-stack/llama-stack-rhoai-2-23.yaml
 
 # Generate only pipelinerun resources
@@ -88,23 +92,14 @@ podman run --rm --userns=keep-id:uid=1001,gid=1001 \
   -v /path/to/aipcc-product-management-configs:/configs:ro \
   -v /path/to/gitlab-repos:/repos \
   -e GITLAB_REPO_PATH=/repos \
-  onboard-product:latest \
+  registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest \
   --config /configs/llama-stack/llama-stack-rhoai-2-23.yaml --mode pipelinerun
 
-# Generate only KRD resources
-podman run --rm --userns=keep-id:uid=1001,gid=1001 \
-  -v /path/to/aipcc-product-management-configs:/configs:ro \
-  -v /path/to/konflux-release-data:/krd \
-  -e KRD_PATH=/krd \
-  onboard-product:latest \
-  --config /configs/examples/basic-product.yaml --mode krd
-
-# View help
-podman run --rm onboard-product:latest --help
+# Build your own image instead
+podman build -t onboard-product:latest .
 ```
 
 **Important Notes:**
-- **Clone configs repository**: Clone [aipcc-product-management-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs) separately before running the container.
 - **User namespace mapping**: Use `--userns=keep-id:uid=1001,gid=1001` to map your user to the container user (UID 1001). This ensures the container can write to your mounted directories without permission issues.
 - **Mount configs**: Mount the configs repository with `-v /path/to/aipcc-product-management-configs:/configs:ro` (read-only).
 - **Mount output directories**: Mount destination directories where you want files generated (KRD repo, GitLab repos).
@@ -123,6 +118,7 @@ This repository contains configurations organized by product family:
 - `rhaiis/` - Red Hat AI Inference Server (core platform)
 - `rhelai/` - Red Hat Enterprise Linux AI bootable containers
 - `base-images/` - Red Hat OpenShift AI base images
+- `docling/` - Docling document processing containers
 - `test/` - Test repository configurations
 
 See the [configs repository README](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs) for details on configuration structure and naming conventions.
@@ -185,7 +181,7 @@ export PIPELINERUN_TEMPLATE_DIR="templates/pipelinerun"
 - `pipelinerun_template_dir`: `./templates/pipelinerun`
 - `cluster`: `stone-prod-p02`
 
-The tool works out of the box with no configuration required!
+The tool works out of the box with no configuration required.
 
 ## Output Structure
 
@@ -236,27 +232,34 @@ uv run python onboard-product.py --config product.yaml --recreate
 
 ### Component Filtering for Production Releases
 
-Components are automatically filtered in ReleasePlanAdmission resources based on repository configuration:
+Components are automatically filtered in ReleasePlanAdmission resources based on repository configuration and tech-preview status:
 
 **Stage ReleasePlanAdmissions:**
-- Include ALL components regardless of repository configuration
-- Use `stage_repository` field from component configuration
+- Include ALL components regardless of repository configuration or tech-preview status
 
-**Production ReleasePlanAdmissions:**
+**Production ReleasePlanAdmissions (regular):**
 - Only include components that have `prod_repository` defined
-- Components without `prod_repository` are automatically excluded
-- Prevents incomplete production releases
+- Skip components marked `tech_preview: true`
+
+**Tech-preview Production ReleasePlanAdmissions** (RPA name contains "tech-preview"):
+- Only include components marked `tech_preview: true`
+- Uses a separate signing configuration (`hacbs-signing-pipeline-config-redhatbeta2`)
 
 **Example configuration:**
 ```yaml
 components:
   - name: stable-component
     stage_repository: quay.io/org/stable-stage
-    prod_repository: quay.io/org/stable-prod     # Included in prod RPA
+    prod_repository: quay.io/org/stable-prod     # Included in regular prod RPA
+
+  - name: tech-preview-component
+    tech_preview: true
+    stage_repository: quay.io/org/preview-stage
+    prod_repository: quay.io/org/preview-prod     # Included in tech-preview prod RPA only
 
   - name: experimental-component
     stage_repository: quay.io/org/experimental-stage
-    # No prod_repository = excluded from prod RPA
+    # No prod_repository = excluded from all prod RPAs
 ```
 
 ### Integration Test Scenarios
@@ -355,7 +358,7 @@ definitions:
   - application: my-product              # Product name
     tenant: ai-tenant                   # Konflux tenant
     branch: rhoai-2.23                  # Target branch
-    
+
     components:
       - name: my-service                 # Component name
         context: .                       # Build context
@@ -364,17 +367,17 @@ definitions:
         stage_repository: quay.io/.../stage  # Stage container registry (full-container only)
         prod_repository: quay.io/.../prod    # OPTIONAL - Production registry (full-container only)
         local_repo_path: /path/to/repo   # OPTIONAL - Override repo path for .tekton files
-        
+
         pipelinerun:
           - build_args_file: build-args/default.conf    # Build config
             pipeline: full-container                     # Pipeline type
             additional_build_secret: registry-auth      # Registry secret
-    
+
     release_plan:
       - name: my-product-stage           # Release plan name
         grace_period: 30                 # Grace period (days)
         autorelease: true                # Enable auto-release
-    
+
     release_plan_admission:
       - name: my-product-stage           # Must match release_plan
         policy: registry-quay-stage      # Release policy
@@ -383,16 +386,34 @@ definitions:
         product_version: "1.0"           # Version string
         product_id: [12345]              # Product ID
         intention: staging               # Environment
+        service_account: release-registry-my-product  # Service account
+        pipeline_path: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
 ```
 
 ### Optional Fields
 
 **Component-level:**
+- `tech_preview` - Mark component as tech preview; controls which prod RPA it appears in (default: false)
 - `variant` - Build variant for multi-variant builds
 - `build_platforms` - Target architectures (default: pipeline defaults)
 - `skip-checks` - Bypass quality gates (default: false)
 - `timeouts` - Pipeline execution limits
 - `local_repo_path` - Override GitLab repository path for .tekton file generation
+
+**Component `component` sub-section:**
+```yaml
+components:
+  - name: my-service
+    component:
+      mintmaker_enabled: true          # Enable MintMaker dependency updates (default: false, i.e. disabled)
+      build_nudge_enabled: true        # Enable build nudging annotation
+      build_nudges_ref:                # Components to nudge after this builds
+        - other-component
+```
+
+**Pipelinerun-level:**
+- `squash-build` - Squash build layers (optional, default: not set)
+- `use_build_args` - Move name/component labels into build-args instead of pipelinerun labels (default: false)
 
 **ReleasePlan-level:**
 - `autorelease_annotation` - Use annotation instead of label for auto-release (default: false)
@@ -402,6 +423,50 @@ definitions:
 
 **ReleasePlanAdmission-level:**
 - `single_component_mode` - Individual vs bundled releases (default: false)
+- `annotations` - Additional metadata used for CPE generation and compliance labels:
+  ```yaml
+  annotations:
+    stream_name: ai-inference-server   # Product stream name
+    cpe_name: ai_inference_server      # CPE identifier component
+    rhel_target: el9                   # RHEL target platform
+  ```
+  When `cpe_name` and `rhel_target` are set on a prod RPA, the tool automatically injects a `cpe=` label into the generated pipelinerun files.
+
+### Compact RPA Format (Recommended for Multiple RPAs)
+
+When multiple release plan admissions share common fields, use the `common`/`rpas` structure to avoid repetition:
+
+```yaml
+release_plan_admission:
+  common:
+    single_component_mode: true
+    annotations:
+      stream_name: my-product
+      cpe_name: my_product
+      rhel_target: el9
+    tags:
+      - "3.2"
+      - "3.2.0"
+      - "3.2.0-{{ timestamp }}"
+    product_name: "My Product"
+    product_version: "3.2"
+    product_id: [12345]
+  rpas:
+    - name: my-product-stage
+      policy: registry-ai-quay-stage
+      intention: staging
+      service_account: release-registry-my-product
+      pipeline_path: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
+      tags:
+        - "latest-stage"              # Appended to common tags
+    - name: my-product-prod
+      policy: registry-ai-containers-prod
+      intention: production
+      service_account: release-registry-prod
+      pipeline_path: pipelines/managed/rh-advisories/rh-advisories.yaml
+```
+
+**Merge rules:** All fields from `common` are merged with each RPA entry. Per-RPA values override common values, except `tags` which are appended (common tags + RPA-specific tags).
 
 ## Templates
 
@@ -430,17 +495,17 @@ The project includes comprehensive end-to-end regression tests:
 
 ```bash
 # Run all tests
-uv run pytest
+uv run python -m pytest
 
 # Run tests with verbose output
-uv run pytest -v
+uv run python -m pytest -v
 
 # Run specific test
-uv run pytest tests/test_generation.py::TestGeneration::test_krd_generation -v
+uv run python -m pytest tests/test_generation.py::TestGeneration::test_krd_generation -v
 
 # Run tests for specific pipeline type
-uv run pytest tests/test_generation.py -k "full-container" -v
-uv run pytest tests/test_generation.py -k "disk-image" -v
+uv run python -m pytest tests/test_generation.py -k "full-container" -v
+uv run python -m pytest tests/test_generation.py -k "disk-image" -v
 ```
 
 ### Updating Expected Test Outputs
@@ -463,7 +528,7 @@ GITLAB_REPO_PATH="$(pwd)/tests/expected/disk-image/pipelinerun/" \
 uv run python onboard-product.py --config tests/configs/test-disk-image.yaml --mode both
 
 # Verify tests pass
-uv run pytest tests/test_generation.py -v
+uv run python -m pytest tests/test_generation.py -v
 ```
 
 **Important:** Always regenerate both pipeline types and run tests to ensure consistency. Commit the updated expected outputs with your template/logic changes.
