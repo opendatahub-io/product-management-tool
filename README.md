@@ -1,6 +1,6 @@
-# AIPCC Product Onboarding
+# AIPCC Product management
 
-Automated tools for onboarding new products to the Konflux platform. This tool generates Kubernetes resources and CI/CD configurations needed to integrate products with Red Hat's build and release infrastructure.
+Automated tools for management new products to the Konflux platform. This tool generates Kubernetes resources and CI/CD configurations needed to integrate products with Red Hat's build and release infrastructure.
 
 ## Features
 
@@ -26,7 +26,7 @@ Automated tools for onboarding new products to the Konflux platform. This tool g
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd aipcc-product-onboarding
+cd aipcc-product-management
 
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -37,26 +37,26 @@ uv sync
 
 ### Basic Usage
 
-Product configurations are maintained in a separate repository: [aipcc-product-onboarding-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs)
+Product configurations are maintained in a separate repository: [aipcc-product-management-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs)
 
 ```bash
 # Clone the configs repository
-git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs.git
+git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs.git
 
 # Generate both KRD and pipelinerun resources
-uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/llama-stack/llama-stack-rhoai-2-23.yaml
+uv run python onboard-product.py --config /path/to/aipcc-product-management-configs/llama-stack/llama-stack-rhoai-2-23.yaml
 
 # Generate only KRD resources
-uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode krd
+uv run python onboard-product.py --config /path/to/aipcc-product-management-configs/examples/basic-product.yaml --mode krd
 
 # Generate only pipelinerun resources
-uv run python onboard-product.py --config /path/to/aipcc-product-onboarding-configs/examples/basic-product.yaml --mode pipelinerun
+uv run python onboard-product.py --config /path/to/aipcc-product-management-configs/examples/basic-product.yaml --mode pipelinerun
 
 # Process multiple configs using glob pattern
-uv run python onboard-product.py --config "/path/to/aipcc-product-onboarding-configs/llama-stack/*.yaml"
+uv run python onboard-product.py --config "/path/to/aipcc-product-management-configs/llama-stack/*.yaml"
 
 # Process all configs in a directory
-uv run python onboard-product.py --config-dir /path/to/aipcc-product-onboarding-configs/llama-stack
+uv run python onboard-product.py --config-dir /path/to/aipcc-product-management-configs/llama-stack
 
 # Combine multiple patterns and directories
 uv run python onboard-product.py --config "/path/to/configs/app1/*.yaml" --config "/path/to/configs/app2/*.yaml" --config-dir /path/to/configs/shared
@@ -68,14 +68,14 @@ If you don't have Python installed, you can use the containerized version:
 
 ```bash
 # Clone the configs repository (if not already cloned)
-git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs.git
+git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs.git
 
 # Build the container image
 podman build -t onboard-product:latest .
 
 # Generate both KRD and pipelinerun resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
-  -v /path/to/aipcc-product-onboarding-configs:/configs:ro \
+  -v /path/to/aipcc-product-management-configs:/configs:ro \
   -v /path/to/konflux-release-data:/krd \
   -v /path/to/gitlab-repos:/repos \
   -e KRD_PATH=/krd \
@@ -85,7 +85,7 @@ podman run --rm --userns=keep-id:uid=1001,gid=1001 \
 
 # Generate only pipelinerun resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
-  -v /path/to/aipcc-product-onboarding-configs:/configs:ro \
+  -v /path/to/aipcc-product-management-configs:/configs:ro \
   -v /path/to/gitlab-repos:/repos \
   -e GITLAB_REPO_PATH=/repos \
   onboard-product:latest \
@@ -93,7 +93,7 @@ podman run --rm --userns=keep-id:uid=1001,gid=1001 \
 
 # Generate only KRD resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
-  -v /path/to/aipcc-product-onboarding-configs:/configs:ro \
+  -v /path/to/aipcc-product-management-configs:/configs:ro \
   -v /path/to/konflux-release-data:/krd \
   -e KRD_PATH=/krd \
   onboard-product:latest \
@@ -104,9 +104,9 @@ podman run --rm onboard-product:latest --help
 ```
 
 **Important Notes:**
-- **Clone configs repository**: Clone [aipcc-product-onboarding-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs) separately before running the container.
+- **Clone configs repository**: Clone [aipcc-product-management-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs) separately before running the container.
 - **User namespace mapping**: Use `--userns=keep-id:uid=1001,gid=1001` to map your user to the container user (UID 1001). This ensures the container can write to your mounted directories without permission issues.
-- **Mount configs**: Mount the configs repository with `-v /path/to/aipcc-product-onboarding-configs:/configs:ro` (read-only).
+- **Mount configs**: Mount the configs repository with `-v /path/to/aipcc-product-management-configs:/configs:ro` (read-only).
 - **Mount output directories**: Mount destination directories where you want files generated (KRD repo, GitLab repos).
 - **Environment variables**: Use `-e` to set paths inside the container (e.g., `-e GITLAB_REPO_PATH=/repos`).
 - **Docker alternative**: If using Docker instead of Podman, replace `podman` with `docker` and adjust the `--userns` flag to `--user $(id -u):$(id -g)` if needed.
@@ -115,7 +115,7 @@ podman run --rm onboard-product:latest --help
 
 ### Product Configuration Files
 
-Product configurations are maintained in a separate repository: [aipcc-product-onboarding-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs)
+Product configurations are maintained in a separate repository: [aipcc-product-management-configs](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs)
 
 This repository contains configurations organized by product family:
 - `examples/` - Template configs for creating new products (basic and advanced examples)
@@ -125,7 +125,7 @@ This repository contains configurations organized by product family:
 - `base-images/` - Red Hat OpenShift AI base images
 - `test/` - Test repository configurations
 
-See the [configs repository README](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-onboarding-configs) for details on configuration structure and naming conventions.
+See the [configs repository README](https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs) for details on configuration structure and naming conventions.
 
 ### Tool Configuration (Output Paths, Cluster Settings)
 
