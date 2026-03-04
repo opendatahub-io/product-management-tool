@@ -35,17 +35,17 @@ uv run ruff check .
 ### Testing
 ```bash
 # Run all tests
-uv run pytest
+uv run python -m pytest
 
 # Run tests with verbose output
-uv run pytest -v
+uv run python -m pytest -v
 
 # Run specific test
-uv run pytest tests/test_generation.py::TestGeneration::test_krd_generation -v
+uv run python -m pytest tests/test_generation.py::TestGeneration::test_krd_generation -v
 
 # Run tests for specific pipeline type
-uv run pytest tests/test_generation.py -k "full-container" -v
-uv run pytest tests/test_generation.py -k "disk-image" -v
+uv run python -m pytest tests/test_generation.py -k "full-container" -v
+uv run python -m pytest tests/test_generation.py -k "disk-image" -v
 ```
 
 ### Updating Expected Test Outputs
@@ -74,7 +74,7 @@ GITLAB_REPO_PATH="$(pwd)/tests/expected/disk-image/pipelinerun/" \
 uv run python onboard-product.py --config tests/configs/test-disk-image.yaml --mode both
 
 # Verify tests pass
-uv run pytest tests/test_generation.py -v
+uv run python -m pytest tests/test_generation.py -v
 ```
 
 **Important:** Always regenerate BOTH pipeline types and run tests to ensure consistency. Commit the updated expected outputs with your template/logic changes.

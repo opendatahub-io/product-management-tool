@@ -71,7 +71,7 @@ spec:
 {%- if "rh-advisories" in pipeline_path %}
     enforceContainerFirstSecurityLabels: true
 {%- endif %}
-{%- if is_tech_preview %}
+{%- if is_tech_preview or use_beta_keys %}
     sign:
       configMapName: "hacbs-signing-pipeline-config-redhatbeta2"
       cosignSecretName: konflux-cosign-signing-production

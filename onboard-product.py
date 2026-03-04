@@ -931,6 +931,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 pipeline_path=rpa["pipeline_path"],
                 rpa_pipeline_type=rpa_pipeline_type,
                 is_tech_preview=is_tech_preview_rpa,
+                use_beta_keys=rpa.get("use_beta_keys", False),
                 annotations=annotations,
             )
             rpa_filename = f"{rpa_name}.yaml"
