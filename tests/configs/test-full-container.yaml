@@ -123,4 +123,7 @@ definitions:
           intention: production
           tags:
             - "stable"
+          timeouts:
+            pipeline: "8h0m0s"
+            tasks: "8h0m0s"
 

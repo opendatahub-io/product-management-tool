@@ -51,5 +51,5 @@ spec:
           value: "pipelines/managed/rh-advisories/rh-advisories.yaml"
     serviceAccountName: prod-service-account
     timeouts:
-      pipeline: "4h0m0s"
-      tasks: 4h0m0s
+      pipeline: "8h0m0s"
+      tasks: 8h0m0s

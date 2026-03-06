@@ -916,6 +916,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             # Extract annotations from RPA config (if present)
             annotations = rpa.get("annotations", None)
 
+            rpa_timeouts = rpa.get("timeouts", {})
             rpa_content = rpa_template.render(
                 application_name=versioned_app_name,
                 release_plan_admission_name=rpa_name,
@@ -934,6 +935,8 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 is_tech_preview=is_tech_preview_rpa,
                 use_beta_keys=rpa.get("use_beta_keys", False),
                 annotations=annotations,
+                pipeline_timeout=rpa_timeouts.get("pipeline", "4h0m0s"),
+                tasks_timeout=rpa_timeouts.get("tasks", "4h0m0s"),
             )
             rpa_filename = f"{rpa_name}.yaml"
             rpa_filepath = os.path.join(rpa_base_path, rpa_filename)
