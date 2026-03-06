@@ -3,7 +3,7 @@ apiVersion: appstudio.redhat.com/v1alpha1
 kind: Component
 metadata:
   annotations:
-    build.appstudio.openshift.io/request: configure-pac
+    build.appstudio.openshift.io/request: configure-pac-no-mr
     git-provider: gitlab
     git-provider-url: "https://gitlab.com"
   name: test-component-1-test-branch-1-0

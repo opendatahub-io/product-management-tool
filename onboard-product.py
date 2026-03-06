@@ -44,8 +44,8 @@ yaml.width = 4096
 
 
 def canonicalize(value):
-    """Convert dots to dashes for filename-safe resource names."""
-    return value.replace(".", "-")
+    """Convert dots to dashes and lowercase for filename-safe resource names."""
+    return value.replace(".", "-").lower()
 
 
 def create_kustomization(directory, files, tenant):
@@ -747,6 +747,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 component_dockerfile=component.get("dockerfile", "Containerfile"),
                 component_url=component["url"],
                 component_revision=branch,
+                is_main_branch=(branch == "main"),
                 build_nudge_enabled=build_nudge_enabled,
                 build_nudges_ref=build_nudges_ref,
                 mintmaker_enabled=mintmaker_enabled,
