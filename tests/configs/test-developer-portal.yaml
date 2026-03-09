@@ -1,0 +1,25 @@
+# Test config for developer portal version generation.
+# Covers: common field inheritance, per-version overrides, optional fields,
+# terms_and_conditions, multiple products, and multiple versions per product.
+developer_portal_versions:
+  - product_slug: test-product-alpha
+    common:
+      ga: true
+      hidden: false
+      invisible: false
+      tracking_disabled: false
+    versions:
+      - version_name: "1.0"
+        release_date: "2025-01-15"
+      - version_name: "2.0"
+        release_date: "2025-07-01"
+        hidden: true
+        terms_and_conditions: "https://www.example.com/terms"
+
+  - product_slug: test-product-beta
+    versions:
+      - version_name: "0.1"
+        ga: false
+        hidden: false
+        release_date: "2024-11-01"
+        tracking_disabled: true

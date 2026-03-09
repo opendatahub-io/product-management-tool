@@ -37,6 +37,7 @@ spec.loader.exec_module(onboard_product)
 # Import the functions we need
 render_krd_templates = onboard_product.render_krd_templates
 render_pipelinerun_templates = onboard_product.render_pipelinerun_templates
+render_developer_portal_templates = onboard_product.render_developer_portal_templates
 
 # Initialize YAML parser
 yaml = YAML()
@@ -254,11 +255,12 @@ class TestMultiConfig:
         # Import collect_config_files from onboard-product.py
         config_files = onboard_product.collect_config_files(["tests/configs/test-*.yaml"], None)
 
-        # Should find both test-full-container.yaml and test-disk-image.yaml
-        assert len(config_files) == 2
+        # Should find test-full-container.yaml, test-disk-image.yaml, and test-developer-portal.yaml
+        assert len(config_files) == 3
         assert all(isinstance(cf, Path) for cf in config_files)
         assert any("test-full-container.yaml" in str(cf) for cf in config_files)
         assert any("test-disk-image.yaml" in str(cf) for cf in config_files)
+        assert any("test-developer-portal.yaml" in str(cf) for cf in config_files)
 
     def test_collect_config_files_config_dir(self):
         """Test collecting config files using --config-dir."""
@@ -349,6 +351,205 @@ class TestMultiConfig:
         another_tenant = tenants_dir / "another-tenant"
         assert another_tenant.exists()
         assert (another_tenant / "multi-test-app3/v1-0").exists()
+
+
+class TestDeveloperPortal:
+    """Test developer portal version file generation."""
+
+    def setup_method(self):
+        self.test_dir = Path(__file__).parent
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.temp_krd = self.temp_dir / "krd"
+        self.temp_krd.mkdir()
+        self.config_file = self.test_dir / "configs/test-developer-portal.yaml"
+        self.expected_dir = self.test_dir / "expected/developer-portal"
+        self.config = Config()
+
+    def teardown_method(self):
+        shutil.rmtree(self.temp_dir)
+
+    def _load_config(self, config_file=None):
+        with open(config_file or self.config_file) as f:
+            return yaml.load(f)
+
+    def compare_directories(self, expected_dir, actual_dir):
+        differences = []
+        if not actual_dir.exists():
+            differences.append(f"Missing directory: {actual_dir}")
+            return differences
+
+        expected_files = set()
+        actual_files = set()
+
+        for root, _dirs, files in os.walk(expected_dir):
+            for file in files:
+                rel_path = Path(root).relative_to(expected_dir) / file
+                expected_files.add(rel_path)
+
+        for root, _dirs, files in os.walk(actual_dir):
+            for file in files:
+                rel_path = Path(root).relative_to(actual_dir) / file
+                actual_files.add(rel_path)
+
+        for missing in expected_files - actual_files:
+            differences.append(f"Missing file: {missing}")
+        for extra in actual_files - expected_files:
+            differences.append(f"Extra file: {extra}")
+
+        for file_path in expected_files.intersection(actual_files):
+            expected_file = expected_dir / file_path
+            actual_file = actual_dir / file_path
+            if not filecmp.cmp(expected_file, actual_file, shallow=False):
+                differences.append(f"Content differs: {file_path}")
+                try:
+                    with open(expected_file) as f:
+                        expected_content = f.read()[:500]
+                    with open(actual_file) as f:
+                        actual_content = f.read()[:500]
+                    differences.append(f"  Expected: {expected_content}")
+                    differences.append(f"  Actual:   {actual_content}")
+                except Exception:
+                    pass
+
+        return differences
+
+    def test_developer_portal_generation(self):
+        """Generation output matches expected files for all products and versions."""
+        data = self._load_config()
+        render_developer_portal_templates(
+            data, str(self.config["krd_template_dir"]), str(self.temp_krd)
+        )
+        differences = self.compare_directories(self.expected_dir, self.temp_krd)
+        if differences:
+            pytest.fail("Developer portal generation differences:\n" + "\n".join(differences))
+
+    def test_developer_portal_empty_config(self):
+        """Returns cleanly when developer_portal_versions is absent or empty."""
+        render_developer_portal_templates(
+            {}, str(self.config["krd_template_dir"]), str(self.temp_krd)
+        )
+        render_developer_portal_templates(
+            {"developer_portal_versions": []},
+            str(self.config["krd_template_dir"]),
+            str(self.temp_krd),
+        )
+        # No files should have been created
+        assert list(self.temp_krd.iterdir()) == []
+
+    def test_developer_portal_missing_product_slug(self):
+        """Raises ValueError when product_slug is missing."""
+        data = {"developer_portal_versions": [{"versions": []}]}
+        with pytest.raises(ValueError, match="missing required field 'product_slug'"):
+            render_developer_portal_templates(
+                data, str(self.config["krd_template_dir"]), str(self.temp_krd)
+            )
+
+    def test_developer_portal_invalid_product_slug(self):
+        """Raises ValueError when product_slug contains path separators."""
+        data = {"developer_portal_versions": [{"product_slug": "bad/slug", "versions": []}]}
+        with pytest.raises(ValueError, match="must not contain path separators"):
+            render_developer_portal_templates(
+                data, str(self.config["krd_template_dir"]), str(self.temp_krd)
+            )
+
+    def test_developer_portal_missing_required_version_field(self):
+        """Raises ValueError when a required version field is missing."""
+        data = {
+            "developer_portal_versions": [
+                {
+                    "product_slug": "test-product",
+                    "versions": [
+                        # missing 'ga', 'hidden', 'release_date'
+                        {"version_name": "1.0"}
+                    ],
+                }
+            ]
+        }
+        with pytest.raises(ValueError, match="missing required field"):
+            render_developer_portal_templates(
+                data, str(self.config["krd_template_dir"]), str(self.temp_krd)
+            )
+
+    def test_developer_portal_common_override(self):
+        """Per-version fields override common fields."""
+        data = {
+            "developer_portal_versions": [
+                {
+                    "product_slug": "override-test",
+                    "common": {"ga": True, "hidden": False, "tracking_disabled": False},
+                    "versions": [
+                        {
+                            "version_name": "1.0",
+                            "release_date": "2025-01-01",
+                            "hidden": True,  # overrides common
+                        }
+                    ],
+                }
+            ]
+        }
+        render_developer_portal_templates(
+            data, str(self.config["krd_template_dir"]), str(self.temp_krd)
+        )
+        output_file = self.temp_krd / "data/external/developer-portal/override-test/1.0.yaml"
+        assert output_file.exists()
+        content = output_file.read_text()
+        assert "hidden: true" in content
+
+    def test_developer_portal_recreate_removes_stale_files(self):
+        """--recreate removes version files that are no longer in config."""
+        # First run: generate two versions
+        data_two_versions = {
+            "developer_portal_versions": [
+                {
+                    "product_slug": "stale-test",
+                    "versions": [
+                        {
+                            "version_name": "1.0",
+                            "ga": True,
+                            "hidden": False,
+                            "release_date": "2025-01-01",
+                        },
+                        {
+                            "version_name": "2.0",
+                            "ga": True,
+                            "hidden": False,
+                            "release_date": "2025-06-01",
+                        },
+                    ],
+                }
+            ]
+        }
+        render_developer_portal_templates(
+            data_two_versions, str(self.config["krd_template_dir"]), str(self.temp_krd)
+        )
+        product_dir = self.temp_krd / "data/external/developer-portal/stale-test"
+        assert (product_dir / "1.0.yaml").exists()
+        assert (product_dir / "2.0.yaml").exists()
+
+        # Second run with recreate: only version 1.0 — 2.0 should be gone
+        data_one_version = {
+            "developer_portal_versions": [
+                {
+                    "product_slug": "stale-test",
+                    "versions": [
+                        {
+                            "version_name": "1.0",
+                            "ga": True,
+                            "hidden": False,
+                            "release_date": "2025-01-01",
+                        },
+                    ],
+                }
+            ]
+        }
+        render_developer_portal_templates(
+            data_one_version,
+            str(self.config["krd_template_dir"]),
+            str(self.temp_krd),
+            recreate=True,
+        )
+        assert (product_dir / "1.0.yaml").exists()
+        assert not (product_dir / "2.0.yaml").exists()
 
 
 if __name__ == "__main__":

@@ -570,6 +570,77 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                     )
 
 
+def render_developer_portal_templates(data, template_dir, krd_path, recreate=False):
+    """
+    Generate developer portal product version YAML files.
+
+    Creates per-version metadata files for each product defined in
+    'developer_portal_versions' config entries.
+
+    Args:
+        data (dict): Merged config data containing 'developer_portal_versions'
+        template_dir (str): Directory containing KRD Jinja2 templates
+        krd_path (str): Output path (konflux-release-data repository)
+        recreate (bool): If True, delete and recreate each product_slug directory
+                         before generation to remove stale version files.
+
+    Output Structure:
+        {krd_path}/data/external/developer-portal/{product_slug}/{version_name}.yaml
+    """
+    _REQUIRED_VERSION_FIELDS = ("version_name", "ga", "hidden", "release_date")
+
+    entries = data.get("developer_portal_versions", [])
+    if not entries:
+        return
+
+    env = create_jinja_env(template_dir)
+    template = env.get_template("developer-portal-version.yaml.j2")
+
+    for entry in entries:
+        product_slug = entry.get("product_slug")
+        if not product_slug:
+            raise ValueError(
+                "developer_portal_versions entry missing required field 'product_slug'"
+            )
+        if "/" in product_slug or "\\" in product_slug:
+            raise ValueError(f"'product_slug' must not contain path separators: {product_slug!r}")
+
+        common = entry.get("common", {})
+        output_dir = os.path.join(krd_path, "data", "external", "developer-portal", product_slug)
+
+        if recreate and os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
+            print(f"  --recreate: Removed {output_dir}")
+
+        ensure_dirs(output_dir)
+
+        for version in entry.get("versions", []):
+            merged = {**common, **version}
+
+            missing = [f for f in _REQUIRED_VERSION_FIELDS if f not in merged]
+            if missing:
+                raise ValueError(
+                    f"developer_portal_versions entry for '{product_slug}' missing required "
+                    f"field(s): {', '.join(missing)}"
+                )
+
+            version_name = merged["version_name"]
+
+            content = template.render(
+                version_name=version_name,
+                ga=merged["ga"],
+                hidden=merged["hidden"],
+                invisible=merged.get("invisible", False),
+                tracking_disabled=merged.get("tracking_disabled", False),
+                terms_and_conditions=merged.get("terms_and_conditions"),
+                release_date=merged["release_date"],
+            )
+
+            filename = f"{version_name}.yaml"
+            write_with_newline(os.path.join(output_dir, filename), content)
+            print(f"Generated developer-portal version '{version_name}' for '{product_slug}'")
+
+
 def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02", recreate=False):
     """
     Generate Konflux Release Data (KRD) resources for product onboarding.
@@ -1195,19 +1266,25 @@ def main():
 
     # Load and merge all definitions
     all_definitions = []
+    all_developer_portal_versions = []
     for config_file in config_files:
         try:
             with open(config_file) as f:
                 data = yaml.load(f)
                 definitions = data.get("definitions", [])
                 all_definitions.extend(definitions)
+                dp_versions = data.get("developer_portal_versions", [])
+                all_developer_portal_versions.extend(dp_versions)
                 print(f"  Loaded {len(definitions)} definition(s) from {config_file.name}")
         except Exception as e:
             print(f"  Error loading {config_file}: {e}")
             raise
 
     # Create merged data structure
-    merged_data = {"definitions": all_definitions}
+    merged_data = {
+        "definitions": all_definitions,
+        "developer_portal_versions": all_developer_portal_versions,
+    }
     print(f"\nTotal: {len(all_definitions)} definition(s) to process\n")
 
     # Generate resources based on mode
@@ -1218,6 +1295,12 @@ def main():
             str(config["krd_template_dir"]),
             str(config["krd_path"]),
             config["cluster"],
+            args.recreate,
+        )
+        render_developer_portal_templates(
+            merged_data,
+            str(config["krd_template_dir"]),
+            str(config["krd_path"]),
             args.recreate,
         )
 

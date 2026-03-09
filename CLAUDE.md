@@ -233,6 +233,53 @@ Pipelinerun resources as:
 - **Disk-Image Specific**: Uses hardcoded values for `image-type: iso`, `config-toml: config/config-iso.toml`, `bib-file: bib.yaml`
 - All paths are relative to the component repository root
 
+### Developer Portal Version Configuration
+Developer portal versions are configured via a top-level `developer_portal_versions` array (separate from `definitions`). The tool generates per-version YAML files consumed by the Red Hat Developer Portal.
+
+**Output path**: `{krd_path}/data/external/developer-portal/{product_slug}/{version_name}.yaml`
+
+**Configuration Structure**:
+```yaml
+developer_portal_versions:
+  - product_slug: rhel-ai           # Required: filesystem-safe slug (no path separators)
+    common:                         # Optional: fields shared by all versions in this entry
+      ga: true
+      hidden: false
+      invisible: false
+      tracking_disabled: false
+    versions:
+      - version_name: "1.0"         # Required
+        release_date: "2025-01-15"  # Required
+        # ga, hidden are required (can come from common)
+      - version_name: "2.0"
+        release_date: "2025-07-01"
+        hidden: true                # Overrides common.hidden
+        terms_and_conditions: "https://www.example.com/terms"  # Optional
+```
+
+**Required fields per version** (must be present in `common` or directly on the version):
+- `version_name` — string identifier, used as the output filename
+- `ga` — boolean, whether the version is generally available
+- `hidden` — boolean, whether the version is hidden in the portal
+- `release_date` — date string (e.g., `"2025-01-15"`)
+
+**Optional fields**:
+- `invisible` — boolean (default: `false`)
+- `tracking_disabled` — boolean (default: `false`)
+- `terms_and_conditions` — URL string; field is omitted from output when not set
+
+**Merge behaviour**: Per-version fields override `common` fields for that version only.
+
+**`--recreate` flag**: When passed, the entire `{product_slug}/` directory is deleted before regenerating, removing any stale version files no longer present in config.
+
+**Validation**: `product_slug` must be non-empty and must not contain `/` or `\`. Missing required fields raise a `ValueError` with a descriptive message identifying the product slug and field name.
+
+**Template**: `templates/KRD/developer-portal-version.yaml.j2`
+
+**Test config**: `tests/configs/test-developer-portal.yaml`
+
+**Expected outputs**: `tests/expected/developer-portal/`
+
 ### IntegrationTestScenario Configuration
 Integration tests are configured using the `integration_test_scenarios` array in each product definition. The tool generates IntegrationTestScenario resources based on reusable templates.
 
