@@ -12,8 +12,8 @@ metadata:
       event == "pull_request" && target_branch == "test-branch-1.0" && (
           ".tekton/test-component-1-on-pull-request.yaml".pathChanged() ||
           "test-args/build.conf".pathChanged() ||
-          "ci".pathChanged() ||
           "TestContainerfile-1".pathChanged() ||
+          "ci".pathChanged() ||
           "context/app/***".pathChanged() ||
           "context/common/***".pathChanged() ||
           "context/test-variant/app/***".pathChanged() ||

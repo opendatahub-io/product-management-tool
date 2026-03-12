@@ -31,6 +31,16 @@ definitions:
             skip-checks: true
             squash-build: true
             use_build_args: true
+            cel_path_changed:
+              - "ci"
+              - "context/app/***"
+              - "context/common/***"
+              - "context/{variant}/app/***"
+              - "context/{variant}/common/***"
+              - "context/{variant}/repo/*"
+            cel_push_tag_prefixes:
+              - "v"
+              - "{variant}-v"
             timeouts:
               pipeline: "3h0m0s"
               tasks: "2h30m0s"

@@ -268,6 +268,57 @@ def normalize_rpa_config(rpa_config):
     return []
 
 
+def normalize_component_config(components_config):
+    """
+    Normalize component configuration to support both old and new formats.
+
+    Supports two formats:
+    - Old format: List of component dicts directly
+    - New format: Dict with 'common' and 'items' keys
+
+    In the new format, common fields are merged with each component:
+    - Top-level fields: component overrides common
+    - common.pipelinerun (a dict of defaults) is merged into each entry
+      of the component's pipelinerun list
+    - All fields are OVERRIDDEN (component value replaces common value)
+    """
+    # Old format: direct list of components (backward compatibility)
+    if isinstance(components_config, list):
+        return components_config
+
+    # New format: dict with common and items
+    if isinstance(components_config, dict) and "items" in components_config:
+        common = components_config.get("common", {})
+        items = components_config.get("items", [])
+
+        # Separate pipelinerun defaults from other common fields
+        common_fields = {k: v for k, v in common.items() if k != "pipelinerun"}
+        common_pipelinerun = common.get("pipelinerun", {})
+
+        merged_components = []
+        for component in items:
+            # Merge top-level fields (component overrides common)
+            merged = {**common_fields, **component}
+
+            # Merge pipelinerun defaults into each pipelinerun entry
+            if common_pipelinerun and "pipelinerun" in component:
+                merged_pipelineruns = []
+                for pr_entry in component["pipelinerun"]:
+                    merged_pr = {**common_pipelinerun, **pr_entry}
+
+                    merged_pipelineruns.append(merged_pr)
+                merged["pipelinerun"] = merged_pipelineruns
+            elif common_pipelinerun and "pipelinerun" not in component:
+                merged["pipelinerun"] = [dict(common_pipelinerun)]
+
+            merged_components.append(merged)
+
+        return merged_components
+
+    # Invalid format, return empty list
+    return []
+
+
 def get_branch_info(definition):
     """
     Extract branch information and calculate versioned names from a product definition.
@@ -439,7 +490,9 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                         cpe_value = f"cpe:/a:redhat:{cpe_name}:{major_minor}::{rhel_target}"
                 break
 
-        for component in definition.get("components", []):
+        components = normalize_component_config(definition.get("components", []))
+
+        for component in components:
             base_component_name = component["name"]
             component_name = get_component_name(base_component_name, branch)
             component_url = component["url"]
@@ -478,6 +531,8 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                 # Extract common parameters
                 build_platforms = pipelinerun_config.get("build_platforms", [])
                 timeouts = pipelinerun_config.get("timeouts", {})
+                cel_path_changed = pipelinerun_config.get("cel_path_changed", [])
+                cel_push_tag_prefixes = pipelinerun_config.get("cel_push_tag_prefixes", [])
                 path_context = pipelinerun_config.get("path_context", "./context/")
                 snyk_project_name = pipelinerun_config.get(
                     "snyk_project_name", "ai-red-hat-inference-server"
@@ -516,6 +571,20 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
 
                 pipeline_template = env.get_template(template_name)
 
+                # Replace {variant} placeholder in cel config entries
+                variant_value = (
+                    pipelinerun_config.get("variant", "") if pipeline == "full-container" else ""
+                )
+                if cel_path_changed:
+                    cel_path_changed = [
+                        path.replace("{variant}", variant_value) for path in cel_path_changed
+                    ]
+                if cel_push_tag_prefixes:
+                    cel_push_tag_prefixes = [
+                        prefix.replace("{variant}", variant_value)
+                        for prefix in cel_push_tag_prefixes
+                    ]
+
                 for pr_type in ["pull", "push"]:
                     # Filter labels for full-container when use_build_args is true
                     # (name and component labels move to build-args, only cpe remains)
@@ -543,6 +612,8 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                         "snyk_project_name": snyk_project_name,
                         "snyk_org": snyk_org,
                         "build_platforms": build_platforms,
+                        "cel_path_changed": cel_path_changed,
+                        "cel_push_tag_prefixes": cel_push_tag_prefixes,
                         "labels": pipelinerun_labels,
                     }
 
@@ -794,12 +865,14 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
         write_with_newline(os.path.join(apps_dir, app_filename), app_content)
         create_kustomization(apps_dir, [app_filename], tenant)
 
+        components = normalize_component_config(definition.get("components", []))
+
         component_files = []
         imagerepo_files = []
         comp_template = env.get_template("component.yaml.j2")
         imagerepo_template = env.get_template("imagerepository.yaml.j2")
 
-        for component in definition.get("components", []):
+        for component in components:
             base_component_name = component["name"]
             component_name = get_component_name(base_component_name, branch)
 
@@ -859,10 +932,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 rpa_name = f"{base_rpa_name}-{normalized_branch}"
 
             # Collect component names for autorelease annotation
-            component_names = [
-                get_component_name(comp["name"], branch)
-                for comp in definition.get("components", [])
-            ]
+            component_names = [get_component_name(comp["name"], branch) for comp in components]
 
             rp_content = rp_template.render(
                 application_name=versioned_app_name,
@@ -909,7 +979,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
 
             # Detect pipeline types for RPA template selection
             pipeline_types = set()
-            for component in definition.get("components", []):
+            for component in components:
                 for pipelinerun_config in component.get("pipelinerun", []):
                     pipeline_types.add(pipelinerun_config["pipeline"])
 
@@ -923,7 +993,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
 
             # Prepare components for RPA template
             updated_components = []
-            for component in definition.get("components", []):
+            for component in components:
                 base_component_name = component["name"]
                 component_name = get_component_name(base_component_name, branch)
 
@@ -1051,7 +1121,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             component_names = its_config.get("components", [])
             if not component_names:
                 # Use all components from the definition
-                component_names = [comp["name"] for comp in definition.get("components", [])]
+                component_names = [comp["name"] for comp in components]
             its_components = [
                 {"name": get_component_name(comp_name, branch)} for comp_name in component_names
             ]

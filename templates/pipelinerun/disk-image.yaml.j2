@@ -12,9 +12,26 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
 {%- if pipelinerun_type == "pull" %}
+{%- if cel_path_changed %}
+      event == "pull_request" && target_branch == "[[ branch ]]" && (
+          ".tekton/[[ base_component_name ]]-on-pull-request.yaml".pathChanged()[[ " ||" if cel_path_changed else "" ]]
+{%- for path in cel_path_changed %}
+          "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
+{%- endfor %}
+      )
+{%- else %}
       event == "pull_request" && target_branch == "[[ branch ]]"
+{%- endif %}
+{%- else %}
+{%- if cel_push_tag_prefixes %}
+      event == "push" && (
+{%- for prefix in cel_push_tag_prefixes %}
+      target_branch.startsWith("refs/tags/[[ prefix ]]")[[ " ||" if not loop.last else "" ]]
+{%- endfor %}
+      )
 {%- else %}
       event == "push" && target_branch.startsWith("refs/tags/")
+{%- endif %}
 {%- endif %}
   labels:
     appstudio.openshift.io/application: [[ application_name ]]
