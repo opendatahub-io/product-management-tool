@@ -30,7 +30,16 @@ metadata:
 {%- endfor %}
       )
 {%- else %}
-      event == "push" && target_branch.startsWith("refs/tags/")
+{%- if cel_path_changed %}
+      event == "push" && target_branch == "[[ branch ]]" && (
+          ".tekton/[[ base_component_name ]]-on-push.yaml".pathChanged()[[ " ||" if cel_path_changed else "" ]]
+{%- for path in cel_path_changed %}
+          "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
+{%- endfor %}
+      )
+{%- else %}
+      event == "push" && target_branch == "[[ branch ]]"
+{%- endif %}
 {%- endif %}
 {%- endif %}
   labels:
@@ -60,7 +69,7 @@ spec:
     value: quay.io/redhat-user-workloads/[[ tenant_name ]]/[[ application_name ]]/[[ component_name ]]:{% if pipelinerun_type == "pull" %}on-pr-{{revision}}{% else %}{{revision}}{% endif %}
 {%- if pipelinerun_type == "pull" %}
   - name: image-expires-after
-    value: 5d
+    value: [[ image_expires_after ]]
 {%- endif %}
   - name: path-context
     value: [[ path_context ]]
@@ -81,6 +90,10 @@ spec:
     value: [[ snyk_project_name ]]
   - name: snyk-org
     value: [[ snyk_org ]]
+{%- for param in extra_params %}
+  - name: [[ param.name ]]
+    value: [[ param.value ]]
+{%- endfor %}
   pipelineRef:
     params:
     - name: org

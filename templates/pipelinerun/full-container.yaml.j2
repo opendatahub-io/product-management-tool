@@ -8,6 +8,9 @@ metadata:
     build.appstudio.redhat.com/pull_request_number: "{{pull_request_number}}"
 {%- endif %}
     build.appstudio.redhat.com/target_branch: "{{target_branch}}"
+{%- if pipelinerun_type == "push" and build_nudge_files %}
+    build.appstudio.openshift.io/build-nudge-files: "[[ build_nudge_files ]]"
+{%- endif %}
     pipelinesascode.tekton.dev/cancel-in-progress: "{% if pipelinerun_type == "pull" %}true{% else %}false{% endif %}"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
@@ -32,10 +35,18 @@ metadata:
 {%- endfor %}
       )
 {%- else %}
-      event == "push" && (
-      target_branch.startsWith("refs/tags/v") ||
-      target_branch.startsWith("refs/tags/[[ variant ]]-v")
+{%- if cel_path_changed %}
+      event == "push" && target_branch == "[[ branch ]]" && (
+          ".tekton/[[ base_component_name ]]-on-push.yaml".pathChanged() ||
+          "[[ build_args_file ]]".pathChanged() ||
+          "[[ component_dockerfile ]]".pathChanged()[[ " ||" if cel_path_changed else "" ]]
+{%- for path in cel_path_changed %}
+          "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
+{%- endfor %}
       )
+{%- else %}
+      event == "push" && target_branch == "[[ branch ]]"
+{%- endif %}
 {%- endif %}
 {%- endif %}
   labels:
@@ -60,7 +71,7 @@ spec:
     value: quay.io/redhat-user-workloads/[[ tenant_name ]]/[[ application_name ]]/[[ component_name ]]:{% if pipelinerun_type == "pull" %}on-pr-{{revision}}{% else %}{{revision}}{% endif %}
 {%- if pipelinerun_type == "pull" %}
   - name: image-expires-after
-    value: 1d
+    value: [[ image_expires_after ]]
 {%- endif %}
   - name: dockerfile
     value: [[ component_dockerfile ]]
@@ -86,6 +97,10 @@ spec:
   - name: squash-build
     value: "true"
 {%- endif %}
+{%- if privileged_nested %}
+  - name: privileged-nested
+    value: "true"
+{%- endif %}
   - name: additional-build-secret
     value: [[ additional_build_secret ]]
 {%- if pipelinerun_type == "pull" and skip_checks %}
@@ -96,8 +111,10 @@ spec:
     value: [[ snyk_project_name ]]
   - name: snyk-org
     value: [[ snyk_org ]]
-  - name: add-capabilities
-    value: ""
+{%- if activation_key %}
+  - name: activation-key
+    value: [[ activation_key ]]
+{%- endif %}
 {%- if labels %}
   - name: labels
     value:
@@ -105,6 +122,10 @@ spec:
     - [[ label ]]
 {%- endfor %}
 {%- endif %}
+{%- for param in extra_params %}
+  - name: [[ param.name ]]
+    value: [[ param.value ]]
+{%- endfor %}
   pipelineRef:
     params:
     - name: org
@@ -124,6 +145,17 @@ spec:
     - name: tokenKey
       value: password
     resolver: git
+{%- if task_run_specs %}
+  taskRunSpecs:
+{%- for spec in task_run_specs %}
+  - pipelineTaskName: [[ spec.task_name ]]
+    computeResources:
+      limits:
+        memory: [[ spec.memory ]]
+      requests:
+        memory: [[ spec.memory ]]
+{%- endfor %}
+{%- endif %}
   taskRunTemplate:
     serviceAccountName: build-pipeline-[[ component_name ]]
   workspaces:

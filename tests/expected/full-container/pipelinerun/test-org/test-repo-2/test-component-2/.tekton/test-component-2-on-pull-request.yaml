@@ -29,7 +29,7 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/test-tenant/test-full-container-test-branch-1-0/test-component-2-test-branch-1-0:on-pr-{{revision}}
   - name: image-expires-after
-    value: 1d
+    value: 5d
   - name: dockerfile
     value: TestContainerfile-2
   - name: path-context
@@ -46,8 +46,6 @@ spec:
     value: test-snyk-project-2
   - name: snyk-org
     value: test-snyk-org-uuid-2
-  - name: add-capabilities
-    value: ""
   - name: labels
     value:
     - name=test-org-prod/test-component-2-prod

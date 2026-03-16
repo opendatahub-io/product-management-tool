@@ -8,10 +8,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
-      event == "push" && (
-      target_branch.startsWith("refs/tags/v") ||
-      target_branch.startsWith("refs/tags/test-variant-2-v")
-      )
+      event == "push" && target_branch == "test-branch-1.0"
   labels:
     appstudio.openshift.io/application: test-full-container-test-branch-1-0
     appstudio.openshift.io/component: test-component-2-test-branch-1-0
@@ -46,8 +43,6 @@ spec:
     value: test-snyk-project-2
   - name: snyk-org
     value: test-snyk-org-uuid-2
-  - name: add-capabilities
-    value: ""
   - name: labels
     value:
     - name=test-org-prod/test-component-2-prod

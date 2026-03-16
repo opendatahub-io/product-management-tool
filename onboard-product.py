@@ -533,6 +533,8 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                 timeouts = pipelinerun_config.get("timeouts", {})
                 cel_path_changed = pipelinerun_config.get("cel_path_changed", [])
                 cel_push_tag_prefixes = pipelinerun_config.get("cel_push_tag_prefixes", [])
+                build_nudge_files = pipelinerun_config.get("build_nudge_files", "")
+                image_expires_after = pipelinerun_config.get("image_expires_after", "5d")
                 path_context = pipelinerun_config.get("path_context", "./context/")
                 snyk_project_name = pipelinerun_config.get(
                     "snyk_project_name", "ai-red-hat-inference-server"
@@ -554,8 +556,8 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                     squash_build = pipelinerun_config.get("squash-build", None)
                     use_build_args = pipelinerun_config.get("use_build_args", False)
 
-                    # Build build_args array if use_build_args is enabled
-                    build_args = []
+                    # Build build_args array from config and/or use_build_args
+                    build_args = list(pipelinerun_config.get("build_args", []))
                     if use_build_args and "prod_repository" in component:
                         try:
                             repo_name = extract_repository_name(component["prod_repository"])
@@ -614,7 +616,10 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                         "build_platforms": build_platforms,
                         "cel_path_changed": cel_path_changed,
                         "cel_push_tag_prefixes": cel_push_tag_prefixes,
+                        "build_nudge_files": build_nudge_files,
+                        "image_expires_after": image_expires_after,
                         "labels": pipelinerun_labels,
+                        "extra_params": pipelinerun_config.get("params", []),
                     }
 
                     # Add parameters specific to full-container pipeline
@@ -626,6 +631,11 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                                 "variant": variant,
                                 "skip_checks": skip_checks,
                                 "squash_build": squash_build,
+                                "privileged_nested": pipelinerun_config.get(
+                                    "privileged_nested", False
+                                ),
+                                "activation_key": pipelinerun_config.get("activation_key", ""),
+                                "task_run_specs": pipelinerun_config.get("task_run_specs", []),
                                 "build_args": build_args,
                             }
                         )

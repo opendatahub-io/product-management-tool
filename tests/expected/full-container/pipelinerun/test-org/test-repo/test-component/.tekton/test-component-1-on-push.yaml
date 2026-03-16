@@ -52,8 +52,6 @@ spec:
     value: test-snyk-project
   - name: snyk-org
     value: test-snyk-org-uuid
-  - name: add-capabilities
-    value: ""
   - name: labels
     value:
     - cpe=cpe:/a:redhat:test_product:1.0::el9
