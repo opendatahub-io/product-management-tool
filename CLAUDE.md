@@ -433,26 +433,18 @@ merged_data = {"definitions": all_definitions}
 - No conflict detection needed per user requirement (each config defines unique tenant/app/branch)
 - Single pass through render functions processes all definitions
 
-**--recreate Flag: Selective Deletion** (lines 436-501):
+**--recreate Flag: Selective Deletion**:
 ```python
-# Deletes managed subdirectories
 subdirs_to_delete = ["applications", "components",
-                     "imagerepositories", "releaseplans"]
+                     "imagerepositories", "releaseplans", "integrationtests"]
 for subdir in subdirs_to_delete:
     subdir_path = os.path.join(base_path, subdir)
     if os.path.exists(subdir_path):
         shutil.rmtree(subdir_path)
-
-# Special handling for integrationtests: delete only ECP files
-for filename in os.listdir(its_dir):
-    if filename.endswith(".yaml") and filename != "kustomization.yaml":
-        if "ecp" in filename:
-            os.remove(file_path)  # Delete ECP tests
-        # Keep non-ECP tests
 ```
-- Selectively deletes managed subdirectories within `{tenant}/{app}/{branch}/`
-- Does NOT delete entire application directory
-- Preserves non-ECP integration tests (files without "ecp" in name)
+- Deletes all managed subdirectories within `{tenant}/{app}/{branch}/`
+- Does NOT delete the entire application directory
+- integrationtests/ is fully deleted and regenerated from config
 - Safe to use with multi-config - only removes managed resources being regenerated
 
 **Component Filtering for Prod RPAs** (lines 545-547):
@@ -567,9 +559,8 @@ Used for:
 - Keeps output clean when integration tests not configured
 
 **--recreate flag (updated to selective deletion)**:
-- Selectively deletes managed subdirectories: applications/, components/, imagerepositories/, releaseplans/
-- For integrationtests/: Deletes only ECP test files, preserves non-ECP tests
-- Prevents orphaned component/imagerepository files when components removed from config
+- Deletes all managed subdirectories: applications/, components/, imagerepositories/, releaseplans/, integrationtests/
+- Prevents orphaned resources when components or ITS are removed from config
 - Scoped deletion - only removes managed resources, not entire application directory
 
 ### Recent Improvements (2025-01)

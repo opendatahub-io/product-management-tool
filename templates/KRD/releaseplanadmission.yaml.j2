@@ -46,7 +46,7 @@ spec:
 {%- else %}
         - name: [[ component.name ]]
           repositories:
-            - url: {% if "stage" in release_plan_admission_name %}[[ component.stage_repository ]]{% else %}[[ component.prod_repository ]]{% endif %}
+            - url: {% if release_plan_admission_name.endswith("-rc") or "-rc-" in release_plan_admission_name %}{% if component.stage_rc_repository is defined %}[[ component.stage_rc_repository ]]{% else %}[[ component.prod_repository | replace("registry.redhat.io", "registry.stage.redhat.io") ]]{% endif %}{% elif "stage" in release_plan_admission_name %}[[ component.stage_repository ]]{% else %}[[ component.prod_repository ]]{% endif %}
 {%- if component.pushSourceContainer is defined %}
           pushSourceContainer: [[ component.pushSourceContainer | lower ]]
 {%- endif %}

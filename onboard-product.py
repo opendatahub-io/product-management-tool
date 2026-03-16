@@ -794,39 +794,12 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                     "components",
                     "imagerepositories",
                     "releaseplans",
+                    "integrationtests",
                 ]
                 for subdir in subdirs_to_delete:
                     subdir_path = os.path.join(base_path, subdir)
                     if os.path.exists(subdir_path):
                         shutil.rmtree(subdir_path)
-
-                # Special handling for integrationtests: delete only ECP files
-                its_dir = os.path.join(base_path, "integrationtests")
-                if os.path.exists(its_dir):
-                    ecp_files_deleted = 0
-                    non_ecp_files_kept = 0
-
-                    for filename in os.listdir(its_dir):
-                        if filename.endswith(".yaml") and filename != "kustomization.yaml":
-                            if "ecp" in filename:
-                                file_path = os.path.join(its_dir, filename)
-                                os.remove(file_path)
-                                ecp_files_deleted += 1
-                            else:
-                                non_ecp_files_kept += 1
-
-                    # Remove kustomization.yaml (will be regenerated with all files)
-                    kustomization_path = os.path.join(its_dir, "kustomization.yaml")
-                    if os.path.exists(kustomization_path):
-                        os.remove(kustomization_path)
-
-                    if ecp_files_deleted > 0 or non_ecp_files_kept > 0:
-                        msg_parts = []
-                        if ecp_files_deleted > 0:
-                            msg_parts.append(f"removed {ecp_files_deleted} ECP test(s)")
-                        if non_ecp_files_kept > 0:
-                            msg_parts.append(f"kept {non_ecp_files_kept} non-ECP test(s)")
-                        print(f"    integrationtests/: {', '.join(msg_parts)}")
 
             print()
 
@@ -914,22 +887,38 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
         releaseplan_files = []
         rp_template = env.get_template("releaseplan.yaml.j2")
 
-        # Normalize RPA config for release plan generation (needed to get RPA names by index)
+        # Normalize RPA config for release plan generation (match by name, not index)
         rpa_config_for_rp = definition.get("release_plan_admission", [])
         rpas_for_rp = normalize_rpa_config(rpa_config_for_rp)
+        rpa_name_set = {rpa["name"] for rpa in rpas_for_rp}
+        rp_name_set = {rp["name"] for rp in definition.get("release_plan", [])}
 
-        for i, rp in enumerate(definition.get("release_plan", [])):
+        # Warn about RPAs with no matching release plan — they will be generated but never triggered
+        for rpa in rpas_for_rp:
+            if rpa["name"] not in rp_name_set:
+                print(
+                    f"Warning: RPA '{rpa['name']}' in application '{versioned_app_name}' "
+                    f"has no matching release plan with the same name. "
+                    f"The RPA will be generated but no release plan will point to it."
+                )
+
+        for rp in definition.get("release_plan", []):
             base_rp_name = rp["name"]
             if branch == "main":
                 rp_name = base_rp_name
             else:
                 rp_name = f"{base_rp_name}-{normalized_branch}"
 
-            base_rpa_name = rpas_for_rp[i]["name"]
+            # Match RP to RPA by name — the release plan name must correspond to an RPA of the same name
+            if base_rp_name not in rpa_name_set:
+                raise ValueError(
+                    f"Release plan '{base_rp_name}' has no matching RPA with the same name. "
+                    f"Available RPAs: {sorted(rpa_name_set)}"
+                )
             if branch == "main":
-                rpa_name = base_rpa_name
+                rpa_name = base_rp_name
             else:
-                rpa_name = f"{base_rpa_name}-{normalized_branch}"
+                rpa_name = f"{base_rp_name}-{normalized_branch}"
 
             # Collect component names for autorelease annotation
             component_names = [get_component_name(comp["name"], branch) for comp in components]
@@ -1154,8 +1143,8 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                 f"Generated IntegrationTestScenario '{its_name}' using template '{template_name}' at {its_filepath}"
             )
 
-        # Include any existing non-ECP integration tests in kustomization
-        # These files were preserved during --recreate by not deleting them
+        # Include any existing integration tests on disk not generated from config
+        # (e.g. manually placed files when --recreate is not used)
         if os.path.exists(integrationtests_dir):
             for filename in sorted(os.listdir(integrationtests_dir)):
                 if (

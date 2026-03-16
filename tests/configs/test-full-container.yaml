@@ -11,6 +11,7 @@ definitions:
         dockerfile: TestContainerfile-1
         url: https://gitlab.com/test-org/test-repo/test-component
         stage_repository: quay.io/test-org/test-component-1-stage
+        stage_rc_repository: quay.io/test-org/test-component-1-rc
         prod_repository: quay.io/test-org-prod/test-component-1-prod
 
         component:
@@ -102,7 +103,10 @@ definitions:
       - name: test-release-plan-prod
         grace_period: 30
         autorelease: false
-    
+      - name: test-release-plan-stage-rc
+        grace_period: 14
+        autorelease: false
+
     release_plan_admission:
       common:
         annotations:
@@ -136,4 +140,11 @@ definitions:
           timeouts:
             pipeline: "8h0m0s"
             tasks: "8h0m0s"
+        - name: test-release-plan-stage-rc
+          policy: rc-policy-name
+          service_account: rc-service-account
+          pipeline_path: test/pipelines/test-rc-pipeline.yaml
+          intention: staging
+          tags:
+            - "rc"
 
