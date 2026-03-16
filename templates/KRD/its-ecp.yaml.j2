@@ -10,10 +10,14 @@ metadata:
 spec:
   application: [[ application_name ]]
   contexts:
+{%- if disabled %}
+    - name: disabled
+{%- else %}
 {%- for component in components %}
     - description: Component testing for [[ component.name ]]
       name: component_[[ component.name ]]
 {%- endfor %}
+{%- endif %}
   params:
 {%- for param in params %}
     - name: [[ param.name ]]
