@@ -15,6 +15,8 @@ definitions:
         
         pipelinerun:
           - pipeline: disk-image
+            image_type: iso
+            config_toml: config/config-test-iso.toml
             path_context: ./test-disk-build/
             snyk_project_name: test-disk-snyk-project
             snyk_org: test-disk-snyk-org-uuid

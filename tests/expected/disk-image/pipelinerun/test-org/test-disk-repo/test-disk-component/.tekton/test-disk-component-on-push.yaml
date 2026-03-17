@@ -8,7 +8,11 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
-      event == "push" && target_branch == "test-disk-branch"
+      event == "push" && target_branch == "test-disk-branch" && (
+          ".tekton/test-disk-component-on-push.yaml".pathChanged() ||
+          "TestDiskContainerfile".pathChanged() ||
+          "config/config-test-iso.toml".pathChanged()
+      )
   labels:
     appstudio.openshift.io/application: test-disk-image-test-disk-branch
     appstudio.openshift.io/component: test-disk-component-test-disk-branch
@@ -32,9 +36,9 @@ spec:
   - name: image-type
     value: iso
   - name: config-toml
-    value: config/config-iso.toml
+    value: config/config-test-iso.toml
   - name: bib-file
-    value: bib.yaml
+    value: TestDiskContainerfile
   - name: build-platforms
     value:
     - linux-root/amd64

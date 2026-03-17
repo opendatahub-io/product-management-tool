@@ -291,9 +291,10 @@ def normalize_component_config(components_config):
         common = components_config.get("common", {})
         items = components_config.get("items", [])
 
-        # Separate pipelinerun defaults from other common fields
-        common_fields = {k: v for k, v in common.items() if k != "pipelinerun"}
+        # Separate pipelinerun and rpa_values defaults from other common fields
+        common_fields = {k: v for k, v in common.items() if k not in ("pipelinerun", "rpa_values")}
         common_pipelinerun = common.get("pipelinerun", {})
+        common_rpa_values = common.get("rpa_values", {})
 
         merged_components = []
         for component in items:
@@ -310,6 +311,10 @@ def normalize_component_config(components_config):
                 merged["pipelinerun"] = merged_pipelineruns
             elif common_pipelinerun and "pipelinerun" not in component:
                 merged["pipelinerun"] = [dict(common_pipelinerun)]
+
+            # Merge rpa_values defaults (component overrides common)
+            if common_rpa_values:
+                merged["rpa_values"] = {**common_rpa_values, **component.get("rpa_values", {})}
 
             merged_components.append(merged)
 
@@ -546,6 +551,8 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                 # Select template based on pipeline type
                 if pipeline == "disk-image":
                     template_name = "disk-image.yaml.j2"
+                    image_type = pipelinerun_config["image_type"]
+                    config_toml = pipelinerun_config["config_toml"]
                 elif pipeline == "full-container":
                     template_name = "full-container.yaml.j2"
                     # Extract full-container specific parameters
@@ -622,8 +629,16 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                         "extra_params": pipelinerun_config.get("params", []),
                     }
 
-                    # Add parameters specific to full-container pipeline
-                    if pipeline == "full-container":
+                    # Add parameters specific to each pipeline type
+                    if pipeline == "disk-image":
+                        template_params.update(
+                            {
+                                "image_type": image_type,
+                                "config_toml": config_toml,
+                                "activation_key": pipelinerun_config.get("activation_key", ""),
+                            }
+                        )
+                    elif pipeline == "full-container":
                         template_params.update(
                             {
                                 "build_args_file": build_args_file,

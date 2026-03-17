@@ -12,16 +12,14 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
 {%- if pipelinerun_type == "pull" %}
-{%- if cel_path_changed %}
       event == "pull_request" && target_branch == "[[ branch ]]" && (
-          ".tekton/[[ base_component_name ]]-on-pull-request.yaml".pathChanged()[[ " ||" if cel_path_changed else "" ]]
+          ".tekton/[[ base_component_name ]]-on-pull-request.yaml".pathChanged() ||
+          "[[ component_dockerfile ]]".pathChanged() ||
+          "[[ config_toml ]]".pathChanged()[[ " ||" if cel_path_changed else "" ]]
 {%- for path in cel_path_changed %}
           "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
 {%- endfor %}
       )
-{%- else %}
-      event == "pull_request" && target_branch == "[[ branch ]]"
-{%- endif %}
 {%- else %}
 {%- if cel_push_tag_prefixes %}
       event == "push" && (
@@ -30,16 +28,14 @@ metadata:
 {%- endfor %}
       )
 {%- else %}
-{%- if cel_path_changed %}
       event == "push" && target_branch == "[[ branch ]]" && (
-          ".tekton/[[ base_component_name ]]-on-push.yaml".pathChanged()[[ " ||" if cel_path_changed else "" ]]
+          ".tekton/[[ base_component_name ]]-on-push.yaml".pathChanged() ||
+          "[[ component_dockerfile ]]".pathChanged() ||
+          "[[ config_toml ]]".pathChanged()[[ " ||" if cel_path_changed else "" ]]
 {%- for path in cel_path_changed %}
           "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
 {%- endfor %}
       )
-{%- else %}
-      event == "push" && target_branch == "[[ branch ]]"
-{%- endif %}
 {%- endif %}
 {%- endif %}
   labels:
@@ -74,11 +70,11 @@ spec:
   - name: path-context
     value: [[ path_context ]]
   - name: image-type
-    value: iso
+    value: [[ image_type ]]
   - name: config-toml
-    value: config/config-iso.toml
+    value: [[ config_toml ]]
   - name: bib-file
-    value: bib.yaml
+    value: [[ component_dockerfile ]]
 {%- if build_platforms %}
   - name: build-platforms
     value:
@@ -90,6 +86,10 @@ spec:
     value: [[ snyk_project_name ]]
   - name: snyk-org
     value: [[ snyk_org ]]
+{%- if activation_key %}
+  - name: activation-key
+    value: [[ activation_key ]]
+{%- endif %}
 {%- for param in extra_params %}
   - name: [[ param.name ]]
     value: [[ param.value ]]
