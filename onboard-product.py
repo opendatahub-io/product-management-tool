@@ -652,6 +652,9 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                                 "activation_key": pipelinerun_config.get("activation_key", ""),
                                 "task_run_specs": pipelinerun_config.get("task_run_specs", []),
                                 "build_args": build_args,
+                                "path_in_repo": pipelinerun_config.get(
+                                    "path_in_repo", "pipelines/full-container.yaml"
+                                ),
                             }
                         )
 
