@@ -8,6 +8,9 @@ metadata:
     build.appstudio.redhat.com/pull_request_number: "{{pull_request_number}}"
 {%- endif %}
     build.appstudio.redhat.com/target_branch: "{{target_branch}}"
+{%- if pipelinerun_type == "push" and build_nudge_files %}
+    build.appstudio.openshift.io/build-nudge-files: "[[ build_nudge_files ]]"
+{%- endif %}
     pipelinesascode.tekton.dev/cancel-in-progress: "{% if pipelinerun_type == "pull" %}true{% else %}false{% endif %}"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: |
