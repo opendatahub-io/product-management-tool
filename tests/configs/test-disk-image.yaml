@@ -4,7 +4,7 @@ definitions:
   - application: test-disk-image
     tenant: test-disk-tenant
     branch: test-disk-branch
-    
+
     components:
       - name: test-disk-component
         context: ./test-disk-context
@@ -12,7 +12,7 @@ definitions:
         url: https://gitlab.com/test-org/test-disk-repo/test-disk-component
         stage_repository: quay.io/test-org/test-disk-stage
         prod_repository: quay.io/test-org-prod/test-disk-prod
-        
+
         pipelinerun:
           - pipeline: disk-image
             image_type: iso
@@ -27,7 +27,7 @@ definitions:
               finally: "2h0m0s"
               pipeline: "8h0m0s"
               tasks: "6h0m0s"
-        
+
         rpa_values:
           destination: test-destination-path
           version: "1.0.0-test"
@@ -39,7 +39,7 @@ definitions:
           productVersionName: "1.0.0-test-staging"
           filePrefix: "test-disk-1.0.0"
           contentType: "disk-image"
-    
+
     integration_test_scenarios:
       - template: its-ecp
         name: check-stage-ecp
@@ -62,7 +62,7 @@ definitions:
       - name: test-disk-release-plan
         grace_period: 14
         autorelease: true
-    
+
     release_plan_admission:
       - name: test-disk-release-plan
         policy: test-disk-policy
@@ -76,4 +76,3 @@ definitions:
         product_version: "1.0.0-disk-test"
         product_id: [77777]
         intention: disk-testing
-

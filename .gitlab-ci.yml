@@ -1,3 +1,8 @@
+include:
+  - project: 'redhat/rhel-ai/ci-cd/central-linter'
+    file: '/templates/linter-central.yml'
+    ref: v0.1.0
+
 workflow:
   rules:
     # Run on merge requests
@@ -48,12 +53,6 @@ lint:format:
     - uv run ruff format --check .
   allow_failure: false
 
-lint:check:
-  extends: .python_base
-  stage: lint
-  script:
-    - uv run ruff check .
-  allow_failure: false
 
 build:
   stage: build
@@ -71,7 +70,7 @@ build:
   variables:
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
     IMAGE_REPO: $CI_REGISTRY_IMAGE
-  
+
   script:
     - make build
     - make push
@@ -93,7 +92,7 @@ manifest:
     - make manifest-build
     - make manifest-push
     - |
-      if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then 
+      if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
         make tag
         IMAGE_TAG=latest make manifest-push
       fi

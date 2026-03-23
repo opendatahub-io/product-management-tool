@@ -4,7 +4,7 @@ definitions:
   - application: test-full-container
     tenant: test-tenant
     branch: test-branch-1.0
-    
+
     components:
       - name: test-component-1
         context: ./test-context
@@ -52,7 +52,7 @@ definitions:
         url: https://gitlab.com/test-org/test-repo-2/test-component-2
         stage_repository: quay.io/test-org/test-component-2-stage
         prod_repository: quay.io/test-org-prod/test-component-2-prod
-        
+
         pipelinerun:
           - build_args_file: test-args/build-2.conf
             pipeline: full-container
@@ -95,7 +95,7 @@ definitions:
             value: 40m0s
           - name: SINGLE_COMPONENT
             value: "true"
- 
+
     release_plan:
       - name: test-release-plan-stage
         grace_period: 7
@@ -147,4 +147,3 @@ definitions:
           intention: staging
           tags:
             - "rc"
-
