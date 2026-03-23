@@ -45,3 +45,12 @@ name = "stone-prod-p02"
 # gitlab_repo_path = "/var/lib/konflux/gitlab"
 # [cluster]
 # name = "stone-prod-p01"
+
+# Local repository path overrides
+# Map GitLab repo paths (org/subgroups/repo) to local checkout locations.
+# Useful when your local repo layout doesn't mirror the GitLab URL structure.
+# These override gitlab_repo_path-based path construction for matched repos.
+#
+# [repo_overrides]
+# "redhat/rhel-ai/rhaiis/containers" = "~/proj/rhaiis/containers"
+# "redhat/rhel-ai/llama-stack/containers" = "~/proj/llama-stack/containers"

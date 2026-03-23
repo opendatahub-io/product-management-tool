@@ -51,6 +51,7 @@ class Config:
         "gitlab_repo_path": Path("output/pipelinerun"),
         "pipelinerun_template_dir": Path("templates/pipelinerun"),
         "cluster": "stone-prod-p02",
+        "repo_overrides": {},
     }
 
     def __init__(
@@ -115,13 +116,19 @@ class Config:
                 data = tomllib.load(f)
 
             # Flatten nested TOML structure to match our config keys
-            return {
+            result = {
                 "krd_template_dir": data.get("paths", {}).get("templates_dir"),
                 "krd_path": data.get("paths", {}).get("krd_path"),
                 "gitlab_repo_path": data.get("paths", {}).get("gitlab_repo_path"),
                 "pipelinerun_template_dir": data.get("paths", {}).get("pipelinerun_template_dir"),
                 "cluster": data.get("cluster", {}).get("name"),
             }
+            if "repo_overrides" in data:
+                result["repo_overrides"] = {
+                    k: str(Path(v).expanduser().resolve())
+                    for k, v in data["repo_overrides"].items()
+                }
+            return result
         except (tomllib.TOMLDecodeError, OSError) as e:
             print(f"Warning: Failed to load config file {config_file}: {e}")
             return {}
@@ -173,6 +180,7 @@ class Config:
             "gitlab_repo_path",
             "pipelinerun_template_dir",
         ]
+        # repo_overrides is a dict, not a path — skip it in path resolution
 
         resolved_config = config.copy()
         for key in path_keys:

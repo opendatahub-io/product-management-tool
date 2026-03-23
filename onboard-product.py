@@ -447,7 +447,7 @@ def extract_repository_name(registry_url):
     return parts[1]
 
 
-def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
+def render_pipelinerun_templates(data, template_dir, gitlab_repo_path, repo_overrides=None):
     """
     Generate Tekton pipelinerun YAML files for CI/CD automation.
 
@@ -517,7 +517,8 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
             if cpe_value:
                 labels.append(f"cpe={cpe_value}")
 
-            # Use local_repo_path if provided, otherwise construct from GitLab URL
+            # Use local_repo_path if provided, otherwise check repo_overrides,
+            # otherwise construct from GitLab URL
             if "local_repo_path" in component:
                 tekton_dir = os.path.join(component["local_repo_path"], ".tekton")
             else:
@@ -526,7 +527,11 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path):
                 except ValueError as e:
                     print(f"Error parsing URL for component {component_name}: {e}")
                     continue
-                tekton_dir = os.path.join(gitlab_repo_path, org, repo, ".tekton")
+                repo_key = f"{org}/{repo}"
+                if repo_overrides and repo_key in repo_overrides:
+                    tekton_dir = os.path.join(repo_overrides[repo_key], ".tekton")
+                else:
+                    tekton_dir = os.path.join(gitlab_repo_path, org, repo, ".tekton")
 
             ensure_dirs(tekton_dir)
 
@@ -1397,6 +1402,7 @@ def main():
             merged_data,
             str(config["pipelinerun_template_dir"]),
             str(config["gitlab_repo_path"]),
+            repo_overrides=config.get("repo_overrides", {}),
         )
 
     print("Generation completed!")
