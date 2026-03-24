@@ -474,26 +474,34 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path, repo_over
 
         branch, normalized_branch, versioned_app_name = get_branch_info(definition)
 
-        # Construct CPE from prod RPA annotations and product_version
-        # Format: cpe:/a:redhat:{cpe_name}:{major.minor}::{rhel_target}
+        # Construct CPE label: cpe:/a:redhat:{cpe_name}:{major.minor}::{rhel_target}
+        # cpe_name/rhel_target from definition-level cpe: field, or prod RPA annotations
+        # product_version always from prod RPA
         cpe_value = None
         rpa_config = definition.get("release_plan_admission", [])
         rpas = normalize_rpa_config(rpa_config)
-        for rpa in rpas:
-            rpa_name = rpa.get("name", "")
-            if "prod" in rpa_name.lower():
-                annotations = rpa.get("annotations", {})
-                if "cpe_name" in annotations and "rhel_target" in annotations:
-                    cpe_name = annotations["cpe_name"]
-                    rhel_target = annotations["rhel_target"]
-                    product_version = rpa.get("product_version", "")
+        prod_rpa = next((rpa for rpa in rpas if "prod" in rpa.get("name", "").lower()), None)
 
-                    # Extract major.minor from product_version (e.g., "3.3" from "3.3.0")
-                    version_parts = product_version.split(".")
-                    if len(version_parts) >= 2:
-                        major_minor = f"{version_parts[0]}.{version_parts[1]}"
-                        cpe_value = f"cpe:/a:redhat:{cpe_name}:{major_minor}::{rhel_target}"
-                break
+        if prod_rpa:
+            cpe_config = definition.get("cpe", {})
+            if "name" in cpe_config and "rhel_target" in cpe_config:
+                cpe_name = cpe_config["name"]
+                rhel_target = cpe_config["rhel_target"]
+            else:
+                annotations = prod_rpa.get("annotations", {})
+                cpe_name = annotations.get("cpe_name")
+                rhel_target = annotations.get("rhel_target")
+
+            if cpe_name and rhel_target:
+                product_version = prod_rpa.get("product_version", "")
+                version_parts = product_version.split(".")
+                if len(version_parts) < 2:
+                    raise ValueError(
+                        f"CPE requires major.minor product_version but got '{product_version}' "
+                        f"in prod RPA '{prod_rpa.get('name', '')}'"
+                    )
+                major_minor = f"{version_parts[0]}.{version_parts[1]}"
+                cpe_value = f"cpe:/a:redhat:{cpe_name}:{major_minor}::{rhel_target}"
 
         components = normalize_component_config(definition.get("components", []))
 
