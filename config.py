@@ -25,7 +25,7 @@ class Config:
     CLI arguments > Environment variables > Config file > Defaults
 
     Environment Variables (backward compatible):
-        TEMPLATES_DIR: KRD templates directory
+        KRD_TEMPLATES_DIR: KRD templates directory
         KRD_PATH: Output path for KRD resources
         CLUSTER: Target Kubernetes cluster name
         PIPELINERUN_TEMPLATE_DIR: Pipelinerun templates directory
@@ -35,7 +35,7 @@ class Config:
         [paths]
         krd_path = "./output/krd"
         gitlab_repo_path = "./output/pipelinerun"
-        templates_dir = "./templates/KRD"
+        krd_templates_dir = "./templates/KRD"
         pipelinerun_template_dir = "./templates/pipelinerun"
 
         [cluster]
@@ -117,7 +117,7 @@ class Config:
 
             # Flatten nested TOML structure to match our config keys
             result = {
-                "krd_template_dir": data.get("paths", {}).get("templates_dir"),
+                "krd_template_dir": data.get("paths", {}).get("krd_templates_dir"),
                 "krd_path": data.get("paths", {}).get("krd_path"),
                 "gitlab_repo_path": data.get("paths", {}).get("gitlab_repo_path"),
                 "pipelinerun_template_dir": data.get("paths", {}).get("pipelinerun_template_dir"),
@@ -144,7 +144,7 @@ class Config:
         """
         env_config = {}
 
-        if krd_template_dir := os.environ.get("TEMPLATES_DIR"):
+        if krd_template_dir := os.environ.get("KRD_TEMPLATES_DIR"):
             env_config["krd_template_dir"] = krd_template_dir
 
         if krd_path := os.environ.get("KRD_PATH"):

@@ -29,6 +29,8 @@ import argparse
 import glob
 import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -447,6 +449,153 @@ def extract_repository_name(registry_url):
     return parts[1]
 
 
+def resolve_repo_path(component, gitlab_repo_path, repo_overrides):
+    """
+    Resolve the local filesystem path for a component repository.
+
+    Raises ValueError if the component URL cannot be parsed.
+    """
+    if "local_repo_path" in component:
+        return component["local_repo_path"]
+    org, repo = parse_gitlab_url(component["url"])  # raises ValueError on bad URL
+    repo_key = f"{org}/{repo}"
+    if repo_overrides and repo_key in repo_overrides:
+        return repo_overrides[repo_key]
+    return os.path.join(gitlab_repo_path, org, repo)
+
+
+def check_repo_health(path, name, expected_branch=None, strict=True):
+    """
+    Check if a git repository is healthy.
+
+    Returns (errors, warnings):
+      errors  — blocking issues that must be fixed (wrong branch, missing path if strict)
+      warnings — soft issues the user can override (behind remote, missing path if not strict)
+
+    Args:
+        path: Path to the repository root
+        name: Human-readable name for messages
+        expected_branch: If set, error when the repo is on a different branch
+        strict: If True, missing path / not-a-git-repo go into errors; if False, into warnings
+    """
+    errors = []
+    warnings = []
+
+    if not os.path.exists(path):
+        msg = f"{name}: path does not exist: {path}"
+        (errors if strict else warnings).append(msg)
+        return errors, warnings
+
+    result = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=path, capture_output=True)
+    if result.returncode != 0:
+        msg = f"{name}: not a git repository: {path}"
+        (errors if strict else warnings).append(msg)
+        return errors, warnings
+
+    result = subprocess.run(
+        ["git", "branch", "--show-current"], cwd=path, capture_output=True, text=True
+    )
+    current_branch = result.stdout.strip()
+    if expected_branch and current_branch != expected_branch:
+        errors.append(f"{name}: on branch '{current_branch}', expected '{expected_branch}'")
+
+    try:
+        print("    Fetching remote...", end="", flush=True)
+        subprocess.run(["git", "fetch", "--quiet"], cwd=path, capture_output=True, timeout=15)
+        print(" done")
+        result = subprocess.run(
+            ["git", "rev-list", "HEAD..@{u}", "--count"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            behind = int(result.stdout.strip() or 0)
+            if behind > 0:
+                warnings.append(
+                    f"{name}: {behind} commit(s) behind origin/{current_branch or expected_branch}"
+                )
+    except subprocess.TimeoutExpired:
+        print(" timed out, skipping remote check")
+
+    return errors, warnings
+
+
+def collect_repo_warnings(data, config, mode):
+    """
+    Collect git repository health issues for all paths that will be written to.
+
+    Returns (errors, warnings):
+      errors  — blocking issues (wrong branch, KRD path missing/not-git)
+      warnings — soft issues the user can override (behind remote, component path missing)
+    """
+    all_errors = []
+    all_warnings = []
+
+    print("Checking repository health...")
+
+    if mode in ["krd", "both"]:
+        print(f"  Checking KRD repository: {config['krd_path']}")
+        errors, warnings = check_repo_health(str(config["krd_path"]), "KRD repository", strict=True)
+        all_errors.extend(errors)
+        all_warnings.extend(warnings)
+
+    if mode in ["pipelinerun", "both"]:
+        gitlab_repo_path = str(config["gitlab_repo_path"])
+        repo_overrides = config.get("repo_overrides", {})
+        seen_repos = set()
+
+        for definition in data.get("definitions", []):
+            expected_branch = definition.get("branch", "main")
+
+            for component in normalize_component_config(definition.get("components", [])):
+                try:
+                    repo_path = resolve_repo_path(component, gitlab_repo_path, repo_overrides)
+                except ValueError as e:
+                    print(f"Error resolving repo path for component '{component['name']}': {e}")
+                    continue
+
+                if repo_path in seen_repos:
+                    continue
+                seen_repos.add(repo_path)
+
+                print(f"  Checking {repo_path} (branch: {expected_branch})")
+                errors, warnings = check_repo_health(
+                    repo_path,
+                    repo_path,
+                    expected_branch=expected_branch,
+                    strict=True,
+                )
+                all_errors.extend(errors)
+                all_warnings.extend(warnings)
+
+    return all_errors, all_warnings
+
+
+def prompt_continue_with_warnings(warnings):
+    """
+    Print soft repository warnings and ask the user whether to continue.
+
+    In non-interactive mode (e.g. CI), warnings are printed but execution
+    continues automatically. Returns True to continue, False to abort.
+    """
+    print("\nRepository warnings (non-blocking):")
+    for w in warnings:
+        print(f"  ! {w}")
+
+    if not sys.stdin.isatty():
+        print("\nNon-interactive mode: continuing despite warnings.")
+        return True
+
+    print()
+    try:
+        answer = input("Continue anyway? [y/N] ").strip().lower()
+        return answer in ("y", "yes")
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return False
+
+
 def render_pipelinerun_templates(data, template_dir, gitlab_repo_path, repo_overrides=None):
     """
     Generate Tekton pipelinerun YAML files for CI/CD automation.
@@ -525,21 +674,13 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path, repo_over
             if cpe_value:
                 labels.append(f"cpe={cpe_value}")
 
-            # Use local_repo_path if provided, otherwise check repo_overrides,
-            # otherwise construct from GitLab URL
-            if "local_repo_path" in component:
-                tekton_dir = os.path.join(component["local_repo_path"], ".tekton")
-            else:
-                try:
-                    org, repo = parse_gitlab_url(component_url)
-                except ValueError as e:
-                    print(f"Error parsing URL for component {component_name}: {e}")
-                    continue
-                repo_key = f"{org}/{repo}"
-                if repo_overrides and repo_key in repo_overrides:
-                    tekton_dir = os.path.join(repo_overrides[repo_key], ".tekton")
-                else:
-                    tekton_dir = os.path.join(gitlab_repo_path, org, repo, ".tekton")
+            try:
+                tekton_dir = os.path.join(
+                    resolve_repo_path(component, gitlab_repo_path, repo_overrides), ".tekton"
+                )
+            except ValueError as e:
+                print(f"Error resolving repo path for component {component_name}: {e}")
+                continue
 
             ensure_dirs(tekton_dir)
 
@@ -794,6 +935,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
     """
     env = create_jinja_env(template_dir)
 
+    tenants_config_written = False
     tenant_app_names = {}
     definitions = data.get("definitions", [])
 
@@ -878,6 +1020,7 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
         app_filename = f"{versioned_app_name}.yaml"
         write_with_newline(os.path.join(apps_dir, app_filename), app_content)
         create_kustomization(apps_dir, [app_filename], tenant)
+        tenants_config_written = True
 
         components = normalize_component_config(definition.get("components", []))
 
@@ -1230,6 +1373,8 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
         if tenant_resources:
             create_kustomization(tenant_path, tenant_resources, tenant)
 
+    return tenants_config_written
+
 
 def main():
     """
@@ -1256,7 +1401,7 @@ def main():
         --recreate: Remove and recreate tenant folders before generation (prevents orphaned resources)
 
     Environment Variables (backward compatible):
-        TEMPLATES_DIR: KRD templates directory
+        KRD_TEMPLATES_DIR: KRD templates directory
         KRD_PATH: Output path for KRD resources
         CLUSTER: Target Kubernetes cluster name
         PIPELINERUN_TEMPLATE_DIR: Pipelinerun templates directory
@@ -1339,6 +1484,12 @@ def main():
         help="Remove and recreate tenant folders before generating resources",
     )
 
+    parser.add_argument(
+        "--skip-repo-checks",
+        action="store_true",
+        help="Skip git repository health checks (branch, up-to-date) before generating resources",
+    )
+
     args = parser.parse_args()
 
     # Validate that at least one config source is provided
@@ -1387,10 +1538,30 @@ def main():
     }
     print(f"\nTotal: {len(all_definitions)} definition(s) to process\n")
 
+    # Check repository health before writing anything
+    if not args.skip_repo_checks:
+        repo_errors, repo_warnings = collect_repo_warnings(merged_data, config, args.mode)
+
+        if repo_errors:
+            print("\nRepository errors (must be fixed before continuing):")
+            for e in repo_errors:
+                print(f"  x {e}")
+            if repo_warnings:
+                print("\nAdditional warnings:")
+                for w in repo_warnings:
+                    print(f"  ! {w}")
+            print("\nAborted. Fix the errors above and try again.")
+            sys.exit(1)
+
+        if repo_warnings and not prompt_continue_with_warnings(repo_warnings):
+            print("Aborted.")
+            sys.exit(0)
+
     # Generate resources based on mode
+    tenants_config_written = False
     if args.mode in ["krd", "both"]:
         print(f"Generating KRD templates to {config['krd_path']}")
-        render_krd_templates(
+        tenants_config_written = render_krd_templates(
             merged_data,
             str(config["krd_template_dir"]),
             str(config["krd_path"]),
@@ -1413,7 +1584,18 @@ def main():
             repo_overrides=config.get("repo_overrides", {}),
         )
 
-    print("Generation completed!")
+    print("\nGeneration completed!")
+
+    if tenants_config_written:
+        krd_path = config["krd_path"]
+        print(
+            f"\n*** ACTION REQUIRED ***\n"
+            f"tenants-config resources were generated. You must regenerate the manifests:\n"
+            f"\n"
+            f"  cd {krd_path} && bash tenants-config/build-manifests.sh\n"
+            f"\n"
+            f"Commit the result together with the generated KRD files."
+        )
 
 
 if __name__ == "__main__":

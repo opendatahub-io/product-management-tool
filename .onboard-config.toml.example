@@ -19,7 +19,7 @@ gitlab_repo_path = "./output/pipelinerun"
 
 # Directory containing KRD Jinja2 templates
 # Default: ./templates/KRD
-templates_dir = "./templates/KRD"
+krd_templates_dir = "./templates/KRD"
 
 # Directory containing pipelinerun Jinja2 templates
 # Default: ./templates/pipelinerun

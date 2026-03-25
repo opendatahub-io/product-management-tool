@@ -156,28 +156,27 @@ Create `.onboard-config.toml` in your project directory:
 [paths]
 krd_path = "./output/krd"
 gitlab_repo_path = "./output/pipelinerun"
-templates_dir = "./templates/KRD"
+krd_templates_dir = "./templates/KRD"
 pipelinerun_template_dir = "./templates/pipelinerun"
 
 [cluster]
 name = "stone-prod-p02"
 ```
 
-See `.onboard-config.toml.example` for a complete example.
 
 **3. Environment Variables (Backward Compatible)**
 ```bash
 export KRD_PATH="/path/to/konflux-release-data/"
 export GITLAB_REPO_PATH="/path/to/gitlab-repos/"
 export CLUSTER="stone-prod-p02"
-export TEMPLATES_DIR="templates/KRD"
+export KRD_TEMPLATES_DIR="templates/KRD"
 export PIPELINERUN_TEMPLATE_DIR="templates/pipelinerun"
 ```
 
 **4. Sensible Defaults (Lowest Priority)**
 - `krd_path`: `./output/krd`
 - `gitlab_repo_path`: `./output/pipelinerun`
-- `templates_dir`: `./templates/KRD`
+- `krd_templates_dir`: `./templates/KRD`
 - `pipelinerun_template_dir`: `./templates/pipelinerun`
 - `cluster`: `stone-prod-p02`
 
