@@ -469,13 +469,13 @@ def check_repo_health(path, name, expected_branch=None, strict=True):
     Check if a git repository is healthy.
 
     Returns (errors, warnings):
-      errors  — blocking issues that must be fixed (wrong branch, missing path if strict)
+      errors  — blocking issues that must be fixed (missing path if strict, not a git repo)
       warnings — soft issues the user can override (behind remote, missing path if not strict)
 
     Args:
         path: Path to the repository root
         name: Human-readable name for messages
-        expected_branch: If set, error when the repo is on a different branch
+        expected_branch: If set, warn when the repo is on a different branch
         strict: If True, missing path / not-a-git-repo go into errors; if False, into warnings
     """
     errors = []
@@ -497,7 +497,10 @@ def check_repo_health(path, name, expected_branch=None, strict=True):
     )
     current_branch = result.stdout.strip()
     if expected_branch and current_branch != expected_branch:
-        errors.append(f"{name}: on branch '{current_branch}', expected '{expected_branch}'")
+        warnings.append(
+            f"{name}: on branch '{current_branch}', expected '{expected_branch}'"
+            f" — make sure this will be merged to '{expected_branch}'"
+        )
 
     try:
         print("    Fetching remote...", end="", flush=True)
@@ -526,7 +529,7 @@ def collect_repo_warnings(data, config, mode):
     Collect git repository health issues for all paths that will be written to.
 
     Returns (errors, warnings):
-      errors  — blocking issues (wrong branch, KRD path missing/not-git)
+      errors  — blocking issues (KRD path missing/not-git)
       warnings — soft issues the user can override (behind remote, component path missing)
     """
     all_errors = []
