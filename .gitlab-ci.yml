@@ -2,6 +2,13 @@ include:
   - project: 'redhat/rhel-ai/ci-cd/central-linter'
     file: '/templates/linter-central.yml'
     ref: v0.1.0
+  # AI Code Review
+  - project: 'redhat/rhel-ai/core/tools/ai-review'
+    file: 'ai-review.gitlab-ci.yml'
+    inputs:
+      INSTRUCTIONS: "Use the repo-reviewer skill for specialized product management tool code review. Focus on Jinja2 template correctness, Konflux resource generation, config schema validation, and branch-aware naming conventions."
+    rules:
+      - if: '$CI_MERGE_REQUEST_LABELS =~ /ai-review/'
 
 workflow:
   rules:

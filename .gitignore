@@ -345,3 +345,9 @@ test-output/
 
 # Keep the example config file in git
 !.onboard-config.toml.example
+
+# Claude Code local state (do not track)
+.claude/**
+# But do track repo-level skills
+!.claude/skills/
+!.claude/skills/**
