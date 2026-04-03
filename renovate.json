@@ -16,5 +16,11 @@
       "datasourceTemplate": "gitlab-releases",
       "depNameTemplate": "redhat/rhel-ai/ci-cd/central-linter"
     }
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": ["redhat/rhel-ai/ci-cd/central-linter"],
+      "groupName": "central-linter"
+    }
   ]
 }
