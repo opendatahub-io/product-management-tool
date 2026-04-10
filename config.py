@@ -84,7 +84,8 @@ class Config:
         config = self.DEFAULTS.copy()
 
         # 1. Load from config file (if exists)
-        config.update(self._load_from_file(config_file))
+        file_config = self._load_from_file(config_file)
+        config.update({k: v for k, v in file_config.items() if v is not None})
 
         # 2. Override with environment variables (backward compatible)
         config.update(self._load_from_env())

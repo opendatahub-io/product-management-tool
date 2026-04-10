@@ -21,7 +21,14 @@ spec:
   params:
 {%- for param in params %}
     - name: [[ param.name ]]
+{%- if "values" in param %}
+      values:
+{%- for v in param["values"] %}
+        - [[ v | yaml_value ]]
+{%- endfor %}
+{%- else %}
       value: [[ param.value | yaml_value ]]
+{%- endif %}
 {%- endfor %}
   resolverRef:
     params:
