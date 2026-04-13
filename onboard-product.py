@@ -1313,6 +1313,20 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
             # Add all other fields from the config (except template, name, components, path_in_repo)
             for key, value in its_config.items():
                 if key not in ["template", "name", "components", "path_in_repo"]:
+                    # Auto-suffix releasePlanAdmissionName params with the branch,
+                    # consistent with how release plan and RPA names are suffixed.
+                    # Configs can use the base name (e.g. "rhaiis-ubi9-prod") and
+                    # the tool will append the branch suffix automatically.
+                    # If the value already has the suffix, it's left unchanged.
+                    if key == "params" and isinstance(value, list) and branch != "main":
+                        value = [
+                            {**p, "value": f"{p['value']}-{normalized_branch}"}
+                            if p.get("name") == "releasePlanAdmissionName"
+                            and "value" in p
+                            and not p["value"].endswith(f"-{normalized_branch}")
+                            else p
+                            for p in value
+                        ]
                     template_params[key] = value
 
             # Render the template
