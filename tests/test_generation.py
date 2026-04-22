@@ -312,6 +312,20 @@ class TestMultiConfig:
         with pytest.raises(ValueError, match="Config directory does not exist"):
             onboard_product.collect_config_files(None, bad_dir)
 
+    def test_collect_config_files_excludes_hidden(self):
+        """Test that hidden/backup/temp files are excluded from directory scan."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "valid.yaml").write_text("a: 1")
+            (tmp_path / ".hidden.yaml").write_text("h: 1")
+            (tmp_path / "_backup.yaml").write_text("b: 1")
+            (tmp_path / "~temp.yaml").write_text("t: 1")
+            result = onboard_product.collect_config_files(None, tmp_path)
+            names = [p.name for p in result]
+            assert names == ["valid.yaml"]
+
     def test_multi_config_krd_generation(self):
         """Test KRD generation with multiple configs."""
         config_dir = self.test_dir / "configs/multi-config-test"

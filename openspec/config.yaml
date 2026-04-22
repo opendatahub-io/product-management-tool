@@ -1,0 +1,23 @@
+schema: spec-driven
+
+context: |
+  Tool: onboard-product.py — generates Kubernetes resources (KRD) and Tekton CI/CD configs
+  for onboarding products to the Konflux platform.
+  Tech stack: Python 3.11+, Jinja2 (with [[ ]] delimiters), ruamel.yaml, argparse
+  Testing: pytest, ruff (lint/format)
+  Config format: YAML product definitions with hierarchical merging
+  Two pipeline types: full-container, disk-image
+  Branch-aware naming: main → base name, other branches → base-normalized-branch
+
+rules:
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Focus on correctness properties, not implementation details
+    - Cover both old and new config formats (backward compatibility)
+    - Include edge cases for branch naming (dots, special chars)
+  design:
+    - Reference existing patterns in onboard-product.py before inventing new ones
+    - Keep templates using [[ ]] Jinja2 delimiters
+  proposal:
+    - Consider impact on existing test configs in tests/configs/
+    - Note if expected outputs need regeneration

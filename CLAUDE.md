@@ -29,7 +29,21 @@ Product configs live in a separate repo: `https://gitlab.com/redhat/rhel-ai/ci-c
 
 ## Regenerating Expected Test Outputs
 
-Run this after changing any template or generation logic:
+Run this after changing any template or generation logic. Always commit the updated expected outputs together with your template/logic changes so the diff is visible for review.
+
+```bash
+KRD_PATH="$(pwd)/tests/expected/full-container/krd/" \
+GITLAB_REPO_PATH="$(pwd)/tests/expected/full-container/pipelinerun/" \
+uv run python onboard-product.py --config tests/configs/test-full-container.yaml --mode both
+
+KRD_PATH="$(pwd)/tests/expected/disk-image/krd/" \
+GITLAB_REPO_PATH="$(pwd)/tests/expected/disk-image/pipelinerun/" \
+uv run python onboard-product.py --config tests/configs/test-disk-image.yaml --mode both
+
+uv run python -m pytest tests/test_generation.py -v
+```
+
+For a full reset of all expected outputs:
 
 ```bash
 rm -rf tests/expected/full-container/* tests/expected/disk-image/*
@@ -45,8 +59,6 @@ uv run python onboard-product.py --config tests/configs/test-disk-image.yaml --m
 
 uv run python -m pytest tests/test_generation.py -v
 ```
-
-Always regenerate both pipeline types and commit the updated expected outputs with your changes.
 
 ## Architecture
 
