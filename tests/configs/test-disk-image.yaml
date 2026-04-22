@@ -6,39 +6,40 @@ definitions:
     branch: test-disk-branch
 
     components:
-      - name: test-disk-component
-        context: ./test-disk-context
-        dockerfile: TestDiskContainerfile
-        url: https://gitlab.com/test-org/test-disk-repo/test-disk-component
-        stage_repository: quay.io/test-org/test-disk-stage
-        prod_repository: quay.io/test-org-prod/test-disk-prod
+      items:
+        - name: test-disk-component
+          context: ./test-disk-context
+          dockerfile: TestDiskContainerfile
+          url: https://gitlab.com/test-org/test-disk-repo/test-disk-component
+          stage_repository: quay.io/test-org/test-disk-stage
+          prod_repository: quay.io/test-org-prod/test-disk-prod
 
-        pipelinerun:
-          - pipeline: disk-image
-            image_type: iso
-            config_toml: config/config-test-iso.toml
-            path_context: ./test-disk-build/
-            snyk_project_name: test-disk-snyk-project
-            snyk_org: test-disk-snyk-org-uuid
-            build_platforms:
-              - linux-root/amd64
-              - linux-root/arm64
-            timeouts:
-              finally: "2h0m0s"
-              pipeline: "8h0m0s"
-              tasks: "6h0m0s"
+          pipelinerun:
+            - pipeline: disk-image
+              image_type: iso
+              config_toml: config/config-test-iso.toml
+              path_context: ./test-disk-build/
+              snyk_project_name: test-disk-snyk-project
+              snyk_org: test-disk-snyk-org-uuid
+              build_platforms:
+                - linux-root/amd64
+                - linux-root/arm64
+              timeouts:
+                finally: "2h0m0s"
+                pipeline: "8h0m0s"
+                tasks: "6h0m0s"
 
-        rpa_values:
-          destination: test-destination-path
-          version: "1.0.0-test"
-          filename: "test-disk-{{ release_timestamp }}-x86_64-boot.iso.gz"
-          source: "test-install.iso.gz"
-          productName: "Test Disk Image Product"
-          productCode: "TESTDISK"
-          productVersion: "1.0.0-test"
-          productVersionName: "1.0.0-test-staging"
-          filePrefix: "test-disk-1.0.0"
-          contentType: "disk-image"
+          rpa_values:
+            destination: test-destination-path
+            version: "1.0.0-test"
+            filename: "test-disk-{{ release_timestamp }}-x86_64-boot.iso.gz"
+            source: "test-install.iso.gz"
+            productName: "Test Disk Image Product"
+            productCode: "TESTDISK"
+            productVersion: "1.0.0-test"
+            productVersionName: "1.0.0-test-staging"
+            filePrefix: "test-disk-1.0.0"
+            contentType: "disk-image"
 
     integration_test_scenarios:
       - template: its-ecp
@@ -64,15 +65,17 @@ definitions:
         autorelease: true
 
     release_plan_admission:
-      - name: test-disk-release-plan
-        policy: test-disk-policy
+      common:
         single_component_mode: true
-        service_account: test-disk-service-account
-        pipeline_path: test/disk-pipelines/test-disk-pipeline.yaml
         tags:
           - "test-disk-latest"
           - "test-disk-{{ timestamp }}"
         product_name: "Test Disk Image Suite"
         product_version: "1.0.0-disk-test"
         product_id: [77777]
-        intention: disk-testing
+      rpas:
+        - name: test-disk-release-plan
+          policy: test-disk-policy
+          service_account: test-disk-service-account
+          pipeline_path: test/disk-pipelines/test-disk-pipeline.yaml
+          intention: disk-testing

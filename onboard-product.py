@@ -209,28 +209,19 @@ def get_component_name(base_name, branch):
 
 def normalize_rpa_config(rpa_config):
     """
-    Normalize RPA configuration to support both old and new formats.
+    Normalize RPA configuration from dict with 'common' and 'rpas' keys.
 
-    Supports two formats:
-    - Old format: List of RPA dicts directly
-    - New format: Dict with 'common' and 'rpas' keys
-
-    In the new format, common fields are merged with each RPA:
+    Common fields are merged with each RPA:
     - Tags are APPENDED (RPA tags added to common tags)
     - All other fields are OVERRIDDEN (RPA value replaces common value)
 
     Args:
-        rpa_config: Either a list of RPAs or a dict with 'common' and 'rpas'
+        rpa_config: Dict with 'common' and 'rpas' keys
 
     Returns:
         list: List of fully merged RPA configurations
 
     Examples:
-        Old format:
-        [{"name": "stage", "policy": "p1"}, {"name": "prod", "policy": "p2"}]
-        Returns: same list
-
-        New format (tags append):
         {"common": {"tags": ["v1", "v2"]}, "rpas": [
             {"name": "stage", "tags": ["stage"]},
             {"name": "prod", "tags": ["stable"]}
@@ -239,91 +230,75 @@ def normalize_rpa_config(rpa_config):
             {"name": "stage", "tags": ["v1", "v2", "stage"]},
             {"name": "prod", "tags": ["v1", "v2", "stable"]}
         ]
-
-    Note:
-        TODO: Once all configs are migrated to new format, simplify this function
-        to only handle dict format and remove backward compatibility for list format.
     """
-    # Old format: direct list of RPAs (backward compatibility)
-    if isinstance(rpa_config, list):
-        return rpa_config
+    if not isinstance(rpa_config, dict) or "rpas" not in rpa_config:
+        raise ValueError(
+            f"Invalid RPA config format: expected dict with 'rpas' key, got {type(rpa_config).__name__}"
+        )
 
-    # New format: dict with common and rpas
-    if isinstance(rpa_config, dict) and "rpas" in rpa_config:
-        common = rpa_config.get("common", {})
-        rpas = rpa_config.get("rpas", [])
+    common = rpa_config.get("common", {})
+    rpas = rpa_config.get("rpas", [])
 
-        # Merge common with each RPA (RPA overrides common, except tags which append)
-        merged_rpas = []
-        for rpa in rpas:
-            merged_rpa = {**common, **rpa}
+    # Merge common with each RPA (RPA overrides common, except tags which append)
+    merged_rpas = []
+    for rpa in rpas:
+        merged_rpa = {**common, **rpa}
 
-            # Special handling for tags: append RPA tags to common tags instead of replacing
-            if "tags" in common and "tags" in rpa:
-                merged_rpa["tags"] = common["tags"] + rpa["tags"]
+        # Special handling for tags: append RPA tags to common tags instead of replacing
+        if "tags" in common and "tags" in rpa:
+            merged_rpa["tags"] = common["tags"] + rpa["tags"]
 
-            merged_rpas.append(merged_rpa)
+        merged_rpas.append(merged_rpa)
 
-        return merged_rpas
-
-    # Invalid format, return empty list
-    return []
+    return merged_rpas
 
 
 def normalize_component_config(components_config):
     """
-    Normalize component configuration to support both old and new formats.
+    Normalize component configuration from dict with 'common' and 'items' keys.
 
-    Supports two formats:
-    - Old format: List of component dicts directly
-    - New format: Dict with 'common' and 'items' keys
-
-    In the new format, common fields are merged with each component:
+    Common fields are merged with each component:
     - Top-level fields: component overrides common
     - common.pipelinerun (a dict of defaults) is merged into each entry
       of the component's pipelinerun list
     - All fields are OVERRIDDEN (component value replaces common value)
     """
-    # Old format: direct list of components (backward compatibility)
-    if isinstance(components_config, list):
-        return components_config
+    if not isinstance(components_config, dict) or "items" not in components_config:
+        raise ValueError(
+            f"Invalid components config format: expected dict with 'items' key, got {type(components_config).__name__}"
+        )
 
-    # New format: dict with common and items
-    if isinstance(components_config, dict) and "items" in components_config:
-        common = components_config.get("common", {})
-        items = components_config.get("items", [])
+    common = components_config.get("common", {})
+    items = components_config.get("items", [])
 
-        # Separate pipelinerun and rpa_values defaults from other common fields
-        common_fields = {k: v for k, v in common.items() if k not in ("pipelinerun", "rpa_values")}
-        common_pipelinerun = common.get("pipelinerun", {})
-        common_rpa_values = common.get("rpa_values", {})
+    # Separate pipelinerun and rpa_values defaults from other common fields
+    common_fields = {k: v for k, v in common.items() if k not in ("pipelinerun", "rpa_values")}
+    common_pipelinerun = common.get("pipelinerun", {})
+    common_rpa_values = common.get("rpa_values", {})
 
-        merged_components = []
-        for component in items:
-            # Merge top-level fields (component overrides common)
-            merged = {**common_fields, **component}
+    merged_components = []
+    for component in items:
+        # Merge top-level fields (component overrides common)
+        merged = {**common_fields, **component}
 
-            # Merge pipelinerun defaults into each pipelinerun entry
-            if common_pipelinerun and "pipelinerun" in component:
-                merged_pipelineruns = []
-                for pr_entry in component["pipelinerun"]:
-                    merged_pr = {**common_pipelinerun, **pr_entry}
+        # Merge pipelinerun defaults into each pipelinerun entry
+        if common_pipelinerun and "pipelinerun" in component:
+            merged_pipelineruns = []
+            for pr_entry in component["pipelinerun"]:
+                merged_pr = {**common_pipelinerun, **pr_entry}
 
-                    merged_pipelineruns.append(merged_pr)
-                merged["pipelinerun"] = merged_pipelineruns
-            elif common_pipelinerun and "pipelinerun" not in component:
-                merged["pipelinerun"] = [dict(common_pipelinerun)]
+                merged_pipelineruns.append(merged_pr)
+            merged["pipelinerun"] = merged_pipelineruns
+        elif common_pipelinerun and "pipelinerun" not in component:
+            merged["pipelinerun"] = [dict(common_pipelinerun)]
 
-            # Merge rpa_values defaults (component overrides common)
-            if common_rpa_values:
-                merged["rpa_values"] = {**common_rpa_values, **component.get("rpa_values", {})}
+        # Merge rpa_values defaults (component overrides common)
+        if common_rpa_values:
+            merged["rpa_values"] = {**common_rpa_values, **component.get("rpa_values", {})}
 
-            merged_components.append(merged)
+        merged_components.append(merged)
 
-        return merged_components
-
-    # Invalid format, return empty list
-    return []
+    return merged_components
 
 
 def get_branch_info(definition):

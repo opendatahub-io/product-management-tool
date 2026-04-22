@@ -5,17 +5,18 @@ definitions:
     branch: main
 
     components:
-      - name: component-b
-        context: .
-        dockerfile: Containerfile
-        url: https://gitlab.com/test/repo-b
-        stage_repository: quay.io/test/app2-stage
-        prod_repository: quay.io/test/app2-prod
+      items:
+        - name: component-b
+          context: .
+          dockerfile: Containerfile
+          url: https://gitlab.com/test/repo-b
+          stage_repository: quay.io/test/app2-stage
+          prod_repository: quay.io/test/app2-prod
 
-        pipelinerun:
-          - build_args_file: build.conf
-            pipeline: full-container
-            additional_build_secret: test-secret
+          pipelinerun:
+            - build_args_file: build.conf
+              pipeline: full-container
+              additional_build_secret: test-secret
 
     release_plan:
       - name: app2-stage
@@ -23,13 +24,15 @@ definitions:
         autorelease: true
 
     release_plan_admission:
-      - name: app2-stage
-        policy: test-policy
+      common:
         single_component_mode: false
-        service_account: test-sa
-        pipeline_path: test/pipeline.yaml
-        tags: ["stage"]
         product_name: "Test App 2"
         product_version: "1.0"
         product_id: [10002]
-        intention: staging
+      rpas:
+        - name: app2-stage
+          policy: test-policy
+          service_account: test-sa
+          pipeline_path: test/pipeline.yaml
+          tags: ["stage"]
+          intention: staging
