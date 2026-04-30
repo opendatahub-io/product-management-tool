@@ -146,7 +146,8 @@ Available arguments:
 - `--pipelinerun-templates-dir` - Pipelinerun templates directory
 - `--cluster` - Target Kubernetes cluster
 - `--settings` - Path to TOML settings file
-- `--recreate` - Remove and recreate tenant folders before generation (prevents orphaned resources)
+- `--recreate` - Remove and recreate managed resources before generation (cleans KRD tenant subdirs and `.tekton/` pipelinerun files)
+- `--recreate-rpa` - Remove and recreate ReleasePlanAdmission files before generation (tenant-wide scope, see below)
 
 **2. Configuration File**
 
@@ -222,12 +223,24 @@ uv run python onboard-product.py --config product.yaml --recreate
 
 **How it works:**
 - Selectively deletes managed subdirectories: `applications/`, `components/`, `imagerepositories/`, `releaseplans/`
+- Deletes all `.yaml` files in managed `.tekton/` directories (per-component repo)
 - For `integrationtests/`: Deletes only ECP test files (containing "ecp" in filename)
 - **Preserves non-ECP integration tests** that you manually created
 - Regenerates all managed resources from your configuration
 
 **Without --recreate:** Files are merged/updated, deleted components remain in the output
 **With --recreate:** Managed resources are removed and regenerated, non-ECP integration tests preserved
+
+### RPA Cleanup with --recreate-rpa
+
+The `--recreate-rpa` flag removes ReleasePlanAdmission files before regeneration. This is separate from `--recreate` because RPA directories are **tenant-wide** — they are shared across applications, unlike KRD directories which are scoped per-app.
+
+```bash
+# Clean regeneration including RPAs
+uv run python onboard-product.py --config product.yaml --recreate --recreate-rpa
+```
+
+**Important:** `--recreate-rpa` deletes ALL `.yaml` files in `ReleasePlanAdmission/{tenant}/` directories. If multiple applications share a tenant, running with only one app's config will remove the other app's RPAs. Always include all related configs when using this flag.
 
 ### Component Filtering for Production Releases
 
@@ -346,6 +359,11 @@ uv run python onboard-product.py --config app1.yaml --recreate  # Deletes app1 r
 
 # After: Process all configs together - nothing orphaned
 uv run python onboard-product.py --config "configs/*.yaml" --recreate  # Regenerates all apps
+```
+
+**This is especially critical for `--recreate-rpa`**: RPA directories are tenant-wide, so running with a subset of configs will delete RPAs from apps not included in the run. Always process all configs sharing a tenant together:
+```bash
+uv run python onboard-product.py --config "configs/*.yaml" --recreate --recreate-rpa
 ```
 
 ## Configuration Schema

@@ -122,4 +122,6 @@ Copy `.onboard-config.toml.example` to `.onboard-config.toml` for local override
 
 **Pipelinerun files in wrong location** — check `local_repo_path` in component config; it overrides the GitLab URL-based path resolution.
 
-**`--recreate` scope** — deletes only managed subdirs within `{tenant}/{app}/{branch}/`, not the whole app dir. Run with all related configs together to avoid orphaning resources.
+**`--recreate` scope** — deletes managed subdirs within `{tenant}/{app}/{branch}/` (app-scoped) and all `.yaml` files in managed `.tekton/` directories (per-component repo). Run with all related configs together to avoid orphaning resources.
+
+**`--recreate-rpa` scope** — deletes all `.yaml` files in `ReleasePlanAdmission/{tenant}/`. Use it with `--recreate` to also clean RPA files during regeneration. This is **tenant-wide** (not app-scoped), so it will remove RPAs from other applications sharing the same tenant. Always run with all configs for that tenant to avoid orphaning RPAs. Separate from `--recreate` due to the wider blast radius.

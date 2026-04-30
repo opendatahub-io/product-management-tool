@@ -959,6 +959,286 @@ class TestRecreateMode:
         )
         assert custom_file.exists(), "Non-managed directory should be preserved on recreate"
 
+    def test_stale_rpa_files_removed_on_recreate_rpa(self, tmp_path):
+        data = self._base_data()
+        onboard_product.render_krd_templates(
+            data, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02"
+        )
+
+        rpa_dir = (
+            tmp_path
+            / "config"
+            / "stone-prod-p02.hjvn.p1"
+            / "product"
+            / "ReleasePlanAdmission"
+            / "my"
+        )
+        assert rpa_dir.exists()
+        stale = rpa_dir / "old-stale-rpa.yaml"
+        stale.write_text("stale: true\n")
+
+        onboard_product.render_krd_templates(
+            data, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02", recreate_rpa=True
+        )
+        assert not stale.exists(), "Stale RPA file should be removed on --recreate-rpa"
+        rpa_files = list(rpa_dir.glob("*.yaml"))
+        assert len(rpa_files) > 0, (
+            "Freshly generated RPA files should be present after --recreate-rpa"
+        )
+
+    def test_recreate_without_recreate_rpa_preserves_rpa(self, tmp_path):
+        data = self._base_data()
+        onboard_product.render_krd_templates(
+            data, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02"
+        )
+
+        rpa_dir = (
+            tmp_path
+            / "config"
+            / "stone-prod-p02.hjvn.p1"
+            / "product"
+            / "ReleasePlanAdmission"
+            / "my"
+        )
+        stale = rpa_dir / "old-stale-rpa.yaml"
+        stale.write_text("stale: true\n")
+
+        onboard_product.render_krd_templates(
+            data, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02", recreate=True
+        )
+        assert stale.exists(), (
+            "RPA files should be preserved when only --recreate is used (not --recreate-rpa)"
+        )
+
+
+class TestPipelinerunRecreateMode:
+    def _base_data(self):
+        return {
+            "definitions": [
+                {
+                    "application": "my-app",
+                    "tenant": "my-tenant",
+                    "branch": "main",
+                    "components": {
+                        "common": {},
+                        "items": [
+                            {
+                                "name": "my-comp",
+                                "url": "https://gitlab.com/org/repo/comp",
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "b.conf",
+                                        "additional_build_secret": "sec",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    "release_plan": [{"name": "stage", "grace_period": 7}],
+                    "release_plan_admission": {
+                        "common": {},
+                        "rpas": [
+                            {
+                                "name": "stage",
+                                "policy": "p",
+                                "service_account": "sa",
+                                "pipeline_path": "pipe.yaml",
+                                "intention": "staging",
+                                "product_name": "P",
+                                "product_version": "1.0.0",
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
+
+    def test_stale_tekton_files_removed_on_recreate(self, tmp_path):
+        data = self._base_data()
+        onboard_product.render_pipelinerun_templates(
+            data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+
+        tekton_dir = tmp_path / "org" / "repo" / "comp" / ".tekton"
+        assert tekton_dir.exists()
+        stale = tekton_dir / "old-removed-component-on-push.yaml"
+        stale.write_text("stale: true\n")
+
+        onboard_product.render_pipelinerun_templates(
+            data, str(TEMPLATES_PIPELINERUN), str(tmp_path), recreate=True
+        )
+        assert not stale.exists(), "Stale .yaml file in .tekton/ should be removed on recreate"
+        generated_files = list(tekton_dir.glob("*.yaml"))
+        assert len(generated_files) > 0, (
+            "Freshly generated pipelinerun files should be present after recreate"
+        )
+
+    def test_tekton_non_yaml_files_preserved_on_recreate(self, tmp_path):
+        data = self._base_data()
+        onboard_product.render_pipelinerun_templates(
+            data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+
+        tekton_dir = tmp_path / "org" / "repo" / "comp" / ".tekton"
+        non_yaml = tekton_dir / "README.md"
+        non_yaml.write_text("# Pipeline docs\n")
+
+        onboard_product.render_pipelinerun_templates(
+            data, str(TEMPLATES_PIPELINERUN), str(tmp_path), recreate=True
+        )
+        assert non_yaml.exists(), "Non-YAML files in .tekton/ should be preserved on recreate"
+
+    def test_tekton_without_recreate_preserves_stale_files(self, tmp_path):
+        data = self._base_data()
+        onboard_product.render_pipelinerun_templates(
+            data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+
+        tekton_dir = tmp_path / "org" / "repo" / "comp" / ".tekton"
+        stale = tekton_dir / "old-component-on-push.yaml"
+        stale.write_text("stale: true\n")
+
+        onboard_product.render_pipelinerun_templates(
+            data, str(TEMPLATES_PIPELINERUN), str(tmp_path), recreate=False
+        )
+        assert stale.exists(), "Stale files should be preserved when recreate is not set"
+
+
+class TestRPARecreateMultiApp:
+    """Tests for --recreate-rpa with multiple apps sharing a tenant."""
+
+    def _two_app_data(self):
+        """Two apps sharing 'my-tenant' — both produce RPAs in the same directory."""
+        return {
+            "definitions": [
+                {
+                    "application": "app-one",
+                    "tenant": "my-tenant",
+                    "branch": "main",
+                    "components": {
+                        "common": {},
+                        "items": [
+                            {
+                                "name": "comp-one",
+                                "url": "https://gitlab.com/org/repo/comp-one",
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "b.conf",
+                                        "additional_build_secret": "sec",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    "release_plan": [{"name": "app-one-stage", "grace_period": 7}],
+                    "release_plan_admission": {
+                        "common": {},
+                        "rpas": [
+                            {
+                                "name": "app-one-stage",
+                                "policy": "p",
+                                "service_account": "sa",
+                                "pipeline_path": "pipe.yaml",
+                                "intention": "staging",
+                                "product_name": "P1",
+                                "product_version": "1.0.0",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "application": "app-two",
+                    "tenant": "my-tenant",
+                    "branch": "main",
+                    "components": {
+                        "common": {},
+                        "items": [
+                            {
+                                "name": "comp-two",
+                                "url": "https://gitlab.com/org/repo/comp-two",
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "b.conf",
+                                        "additional_build_secret": "sec",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    "release_plan": [{"name": "app-two-stage", "grace_period": 7}],
+                    "release_plan_admission": {
+                        "common": {},
+                        "rpas": [
+                            {
+                                "name": "app-two-stage",
+                                "policy": "p",
+                                "service_account": "sa",
+                                "pipeline_path": "pipe.yaml",
+                                "intention": "staging",
+                                "product_name": "P2",
+                                "product_version": "2.0.0",
+                            }
+                        ],
+                    },
+                },
+            ]
+        }
+
+    def test_recreate_rpa_with_all_configs_regenerates_both(self, tmp_path):
+        """When both apps are in the same run, --recreate-rpa cleans and regenerates all RPAs."""
+        data = self._two_app_data()
+        onboard_product.render_krd_templates(
+            data, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02"
+        )
+
+        rpa_dir = (
+            tmp_path
+            / "config"
+            / "stone-prod-p02.hjvn.p1"
+            / "product"
+            / "ReleasePlanAdmission"
+            / "my"
+        )
+        stale = rpa_dir / "old-orphan.yaml"
+        stale.write_text("stale: true\n")
+
+        onboard_product.render_krd_templates(
+            data, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02", recreate_rpa=True
+        )
+        assert not stale.exists(), "Stale RPA should be removed"
+        rpa_files = sorted(f.name for f in rpa_dir.glob("*.yaml"))
+        assert "app-one-stage.yaml" in rpa_files, "app-one RPA should be regenerated"
+        assert "app-two-stage.yaml" in rpa_files, "app-two RPA should be regenerated"
+
+    def test_recreate_rpa_single_app_removes_other_apps_rpas(self, tmp_path):
+        """Documents the tenant-wide blast radius: running with one app's config deletes the other's RPAs."""
+        both = self._two_app_data()
+        onboard_product.render_krd_templates(
+            both, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02"
+        )
+
+        rpa_dir = (
+            tmp_path
+            / "config"
+            / "stone-prod-p02.hjvn.p1"
+            / "product"
+            / "ReleasePlanAdmission"
+            / "my"
+        )
+        assert (rpa_dir / "app-two-stage.yaml").exists()
+
+        single_app = {"definitions": [both["definitions"][0]]}
+        onboard_product.render_krd_templates(
+            single_app, str(TEMPLATES_KRD), str(tmp_path), "stone-prod-p02", recreate_rpa=True
+        )
+        assert not (rpa_dir / "app-two-stage.yaml").exists(), (
+            "--recreate-rpa with single app config removes other app's RPAs (tenant-wide scope)"
+        )
+        assert (rpa_dir / "app-one-stage.yaml").exists(), "Current app's RPA should be regenerated"
+
 
 # ---------------------------------------------------------------------------
 # Release plan / RPA name matching

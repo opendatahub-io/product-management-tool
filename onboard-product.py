@@ -574,7 +574,9 @@ def prompt_continue_with_warnings(warnings):
         return False
 
 
-def render_pipelinerun_templates(data, template_dir, gitlab_repo_path, repo_overrides=None):
+def render_pipelinerun_templates(
+    data, template_dir, gitlab_repo_path, repo_overrides=None, recreate=False
+):
     """
     Generate Tekton pipelinerun YAML files for CI/CD automation.
 
@@ -595,6 +597,32 @@ def render_pipelinerun_templates(data, template_dir, gitlab_repo_path, repo_over
         └── {component}-on-push.yaml
     """
     env = create_jinja_env(template_dir)
+
+    if recreate:
+        tekton_dirs_to_clean = set()
+        for definition in data.get("definitions", []):
+            components = normalize_component_config(definition.get("components", []))
+            for component in components:
+                try:
+                    tekton_dir = os.path.join(
+                        resolve_repo_path(component, gitlab_repo_path, repo_overrides), ".tekton"
+                    )
+                except ValueError:
+                    continue
+                if os.path.exists(tekton_dir):
+                    tekton_dirs_to_clean.add(tekton_dir)
+
+        if tekton_dirs_to_clean:
+            print(
+                f"\n--recreate: Cleaning {len(tekton_dirs_to_clean)} .tekton "
+                f"director{'y' if len(tekton_dirs_to_clean) == 1 else 'ies'}:"
+            )
+            for tekton_dir in sorted(tekton_dirs_to_clean):
+                print(f"  {tekton_dir}")
+                for filename in os.listdir(tekton_dir):
+                    if filename.endswith(".yaml"):
+                        os.remove(os.path.join(tekton_dir, filename))
+            print()
 
     for definition in data.get("definitions", []):
         tenant = definition["tenant"]
@@ -872,7 +900,9 @@ def render_developer_portal_templates(data, template_dir, krd_path, recreate=Fal
             print(f"Generated developer-portal version '{version_name}' for '{product_slug}'")
 
 
-def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02", recreate=False):
+def render_krd_templates(
+    data, template_dir, krd_path, cluster="stone-prod-p02", recreate=False, recreate_rpa=False
+):
     """
     Generate Konflux Release Data (KRD) resources for product onboarding.
 
@@ -962,6 +992,33 @@ def render_krd_templates(data, template_dir, krd_path, cluster="stone-prod-p02",
                     if os.path.exists(subdir_path):
                         shutil.rmtree(subdir_path)
 
+            print()
+
+    if recreate_rpa:
+        rpa_dirs_to_clean = set()
+        for definition in definitions:
+            tenant = definition["tenant"]
+            rpa_dir = os.path.join(
+                krd_path,
+                "config",
+                f"{cluster}.hjvn.p1",
+                "product",
+                "ReleasePlanAdmission",
+                tenant.replace("-tenant", ""),
+            )
+            if os.path.exists(rpa_dir):
+                rpa_dirs_to_clean.add(rpa_dir)
+
+        if rpa_dirs_to_clean:
+            print(
+                f"\n--recreate-rpa: Cleaning {len(rpa_dirs_to_clean)} ReleasePlanAdmission "
+                f"director{'y' if len(rpa_dirs_to_clean) == 1 else 'ies'}:"
+            )
+            for rpa_dir in sorted(rpa_dirs_to_clean):
+                print(f"  {rpa_dir}")
+                for filename in os.listdir(rpa_dir):
+                    if filename.endswith(".yaml"):
+                        os.remove(os.path.join(rpa_dir, filename))
             print()
 
     # Second pass: Generate all resources
@@ -1473,7 +1530,13 @@ def main():
     parser.add_argument(
         "--recreate",
         action="store_true",
-        help="Remove and recreate tenant folders before generating resources",
+        help="Remove and recreate managed resources before generating (cleans KRD tenant subdirs and .tekton/ pipelinerun files)",
+    )
+
+    parser.add_argument(
+        "--recreate-rpa",
+        action="store_true",
+        help="Remove and recreate ReleasePlanAdmission files before generating (tenant-wide scope, run with all related configs to avoid orphaning)",
     )
 
     parser.add_argument(
@@ -1483,6 +1546,13 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.recreate_rpa:
+        print(
+            "WARNING: --recreate-rpa deletes ALL .yaml files in ReleasePlanAdmission/{tenant}/ directories.\n"
+            "This is tenant-wide — RPAs from other applications sharing the same tenant will be removed.\n"
+            "Ensure all related configs are included in this run to avoid orphaning RPAs.\n"
+        )
 
     # Validate that at least one config source is provided
     if not args.config_patterns and not args.config_dir:
@@ -1559,6 +1629,7 @@ def main():
             str(config["krd_path"]),
             config["cluster"],
             args.recreate,
+            args.recreate_rpa,
         )
         render_developer_portal_templates(
             merged_data,
@@ -1574,6 +1645,7 @@ def main():
             str(config["pipelinerun_template_dir"]),
             str(config["gitlab_repo_path"]),
             repo_overrides=config.get("repo_overrides", {}),
+            recreate=args.recreate,
         )
 
     print("\nGeneration completed!")
