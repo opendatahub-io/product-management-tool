@@ -85,27 +85,9 @@ spec:
     - [[ platform ]]
 {%- endfor %}
 {%- endif %}
-{%- if squash_build %}
-  - name: squash-build
-    value: "true"
-{%- endif %}
-{%- if privileged_nested %}
-  - name: privileged-nested
-    value: "true"
-{%- endif %}
-  - name: additional-build-secret
-    value: [[ additional_build_secret ]]
 {%- if pipelinerun_type == "pull" and skip_checks %}
   - name: skip-checks
     value: "true"
-{%- endif %}
-  - name: snyk-project-name
-    value: [[ snyk_project_name ]]
-  - name: snyk-org
-    value: [[ snyk_org ]]
-{%- if activation_key %}
-  - name: activation-key
-    value: [[ activation_key ]]
 {%- endif %}
 {%- if labels %}
   - name: labels
@@ -116,7 +98,7 @@ spec:
 {%- endif %}
 {%- for param in extra_params %}
   - name: [[ param.name ]]
-    value: [[ param.value ]]
+    value: "[[ param.value ]]"
 {%- endfor %}
   pipelineRef:
     params:

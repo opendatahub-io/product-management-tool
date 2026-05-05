@@ -44,9 +44,9 @@ spec:
     - linux-root/amd64
     - linux-root/arm64
   - name: snyk-project-name
-    value: test-disk-snyk-project
+    value: "test-disk-snyk-project"
   - name: snyk-org
-    value: test-disk-snyk-org-uuid
+    value: "test-disk-snyk-org-uuid"
   pipelineRef:
     params:
     - name: org

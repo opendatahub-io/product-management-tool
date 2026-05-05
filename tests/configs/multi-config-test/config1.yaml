@@ -16,7 +16,9 @@ definitions:
           pipelinerun:
             - build_args_file: build.conf
               pipeline: full-container
-              additional_build_secret: test-secret
+              params:
+                - name: additional-build-secret
+                  value: test-secret
 
     release_plan:
       - name: app1-stage

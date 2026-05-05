@@ -85,17 +85,9 @@ spec:
     - [[ platform ]]
 {%- endfor %}
 {%- endif %}
-  - name: snyk-project-name
-    value: [[ snyk_project_name ]]
-  - name: snyk-org
-    value: [[ snyk_org ]]
-{%- if activation_key %}
-  - name: activation-key
-    value: [[ activation_key ]]
-{%- endif %}
 {%- for param in extra_params %}
   - name: [[ param.name ]]
-    value: [[ param.value ]]
+    value: "[[ param.value ]]"
 {%- endfor %}
   pipelineRef:
     params:

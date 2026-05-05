@@ -333,6 +333,76 @@ def test_normalize_component_config_pipelinerun_from_common_only():
     assert result[0]["pipelinerun"][0]["pipeline"] == "full-container"
 
 
+def test_normalize_component_config_params_lists_combined():
+    config = {
+        "common": {
+            "pipelinerun": {
+                "pipeline": "full-container",
+                "params": [
+                    {"name": "snyk-project-name", "value": "my-project"},
+                    {"name": "snyk-org", "value": "org-123"},
+                    {"name": "additional-build-secret", "value": "global-pull-secret"},
+                ],
+            }
+        },
+        "items": [
+            {
+                "name": "comp-with-own-params",
+                "url": "https://example.com",
+                "pipelinerun": [
+                    {
+                        "build_args_file": "build.conf",
+                        "params": [{"name": "privileged-nested", "value": "true"}],
+                    }
+                ],
+            },
+            {
+                "name": "comp-override-common",
+                "url": "https://example.com",
+                "pipelinerun": [
+                    {
+                        "build_args_file": "build.conf",
+                        "params": [
+                            {"name": "snyk-org", "value": "override-org"},
+                            {"name": "cloud-provider", "value": "aws"},
+                        ],
+                    }
+                ],
+            },
+            {
+                "name": "comp-no-own-params",
+                "url": "https://example.com",
+                "pipelinerun": [{"build_args_file": "build.conf"}],
+            },
+        ],
+    }
+    result = onboard_product.normalize_component_config(config)
+
+    # Item with different params: all combined
+    pr0 = result[0]["pipelinerun"][0]
+    names0 = [p["name"] for p in pr0["params"]]
+    assert "snyk-project-name" in names0
+    assert "snyk-org" in names0
+    assert "additional-build-secret" in names0
+    assert "privileged-nested" in names0
+    assert len(pr0["params"]) == 4
+
+    # Item that overrides a common param: item wins, no duplicates
+    pr1 = result[1]["pipelinerun"][0]
+    names1 = [p["name"] for p in pr1["params"]]
+    assert names1.count("snyk-org") == 1
+    snyk_org = next(p for p in pr1["params"] if p["name"] == "snyk-org")
+    assert snyk_org["value"] == "override-org"
+    assert "snyk-project-name" in names1
+    assert "cloud-provider" in names1
+    assert len(pr1["params"]) == 4
+
+    # Item with no own params: common params inherited as-is
+    pr2 = result[2]["pipelinerun"][0]
+    assert len(pr2["params"]) == 3
+    assert pr2["params"] == config["common"]["pipelinerun"]["params"]
+
+
 def test_normalize_component_config_rpa_values_merge():
     config = {
         "common": {

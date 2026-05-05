@@ -19,11 +19,14 @@ definitions:
               image_type: iso
               config_toml: config/config-test-iso.toml
               path_context: ./test-disk-build/
-              snyk_project_name: test-disk-snyk-project
-              snyk_org: test-disk-snyk-org-uuid
               build_platforms:
                 - linux-root/amd64
                 - linux-root/arm64
+              params:
+                - name: snyk-project-name
+                  value: test-disk-snyk-project
+                - name: snyk-org
+                  value: test-disk-snyk-org-uuid
               timeouts:
                 finally: "2h0m0s"
                 pipeline: "8h0m0s"

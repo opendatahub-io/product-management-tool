@@ -25,16 +25,21 @@ definitions:
             - build_args_file: test-args/build.conf
               variant: test-variant
               path_context: ./test-build-context/
-              snyk_project_name: test-snyk-project
-              snyk_org: test-snyk-org-uuid
               build_platforms:
                 - linux/x86_64
                 - linux/arm64
                 - linux/s390x
-              additional_build_secret: test-registry-secret
               skip-checks: true
-              squash-build: true
               use_build_args: true
+              params:
+                - name: squash-build
+                  value: "true"
+                - name: additional-build-secret
+                  value: test-registry-secret
+                - name: snyk-project-name
+                  value: test-snyk-project
+                - name: snyk-org
+                  value: test-snyk-org-uuid
               cel_path_changed:
                 - "ci"
                 - "context/app/***"
@@ -60,13 +65,17 @@ definitions:
             - build_args_file: test-args/build-2.conf
               variant: test-variant-2
               path_context: ./test-build-context-2/
-              snyk_project_name: test-snyk-project-2
-              snyk_org: test-snyk-org-uuid-2
               build_platforms:
                 - linux/x86_64
                 - linux/arm64
-              additional_build_secret: test-registry-secret-2
               skip-checks: false
+              params:
+                - name: additional-build-secret
+                  value: test-registry-secret-2
+                - name: snyk-project-name
+                  value: test-snyk-project-2
+                - name: snyk-org
+                  value: test-snyk-org-uuid-2
               timeouts:
                 pipeline: "2h0m0s"
                 tasks: "1h30m0s"

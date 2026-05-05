@@ -44,17 +44,17 @@ spec:
     - linux/x86_64
     - linux/arm64
     - linux/s390x
-  - name: squash-build
-    value: "true"
-  - name: additional-build-secret
-    value: test-registry-secret
-  - name: snyk-project-name
-    value: test-snyk-project
-  - name: snyk-org
-    value: test-snyk-org-uuid
   - name: labels
     value:
     - cpe=cpe:/a:redhat:test_product:1.0::el9
+  - name: squash-build
+    value: "true"
+  - name: additional-build-secret
+    value: "test-registry-secret"
+  - name: snyk-project-name
+    value: "test-snyk-project"
+  - name: snyk-org
+    value: "test-snyk-org-uuid"
   pipelineRef:
     params:
     - name: org

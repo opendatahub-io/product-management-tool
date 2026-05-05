@@ -287,6 +287,15 @@ def normalize_component_config(components_config):
             for pr_entry in component["pipelinerun"]:
                 merged_pr = {**common_pipelinerun, **pr_entry}
 
+                # params lists are combined (common + item), not overwritten
+                common_params = common_pipelinerun.get("params", [])
+                item_params = pr_entry.get("params", [])
+                if common_params and item_params:
+                    item_names = {p["name"] for p in item_params}
+                    combined = [p for p in common_params if p["name"] not in item_names]
+                    combined.extend(item_params)
+                    merged_pr["params"] = combined
+
                 merged_pipelineruns.append(merged_pr)
             merged["pipelinerun"] = merged_pipelineruns
         elif common_pipelinerun and "pipelinerun" not in component:
@@ -701,12 +710,6 @@ def render_pipelinerun_templates(
                 build_nudge_files = pipelinerun_config.get("build_nudge_files", "")
                 image_expires_after = pipelinerun_config.get("image_expires_after", "5d")
                 path_context = pipelinerun_config.get("path_context", "./context/")
-                snyk_project_name = pipelinerun_config.get(
-                    "snyk_project_name", "ai-red-hat-inference-server"
-                )
-                snyk_org = pipelinerun_config.get(
-                    "snyk_org", "98e4f46e-334c-414b-b444-43361f404b2f"
-                )
 
                 # Select template based on pipeline type
                 if pipeline == "disk-image":
@@ -717,10 +720,8 @@ def render_pipelinerun_templates(
                     template_name = "full-container.yaml.j2"
                     # Extract full-container specific parameters
                     build_args_file = pipelinerun_config["build_args_file"]
-                    additional_build_secret = pipelinerun_config["additional_build_secret"]
                     variant = pipelinerun_config.get("variant", "")
                     skip_checks = pipelinerun_config.get("skip-checks", False)
-                    squash_build = pipelinerun_config.get("squash-build", None)
                     use_build_args = pipelinerun_config.get("use_build_args", False)
 
                     # Build build_args array from config and/or use_build_args
@@ -778,8 +779,6 @@ def render_pipelinerun_templates(
                         "branch": branch,
                         "timeouts": timeouts,
                         "path_context": path_context,
-                        "snyk_project_name": snyk_project_name,
-                        "snyk_org": snyk_org,
                         "build_platforms": build_platforms,
                         "cel_path_changed": cel_path_changed,
                         "cel_push_tag_prefixes": cel_push_tag_prefixes,
@@ -795,21 +794,14 @@ def render_pipelinerun_templates(
                             {
                                 "image_type": image_type,
                                 "config_toml": config_toml,
-                                "activation_key": pipelinerun_config.get("activation_key", ""),
                             }
                         )
                     elif pipeline == "full-container":
                         template_params.update(
                             {
                                 "build_args_file": build_args_file,
-                                "additional_build_secret": additional_build_secret,
                                 "variant": variant,
                                 "skip_checks": skip_checks,
-                                "squash_build": squash_build,
-                                "privileged_nested": pipelinerun_config.get(
-                                    "privileged_nested", False
-                                ),
-                                "activation_key": pipelinerun_config.get("activation_key", ""),
                                 "task_run_specs": pipelinerun_config.get("task_run_specs", []),
                                 "build_args": build_args,
                                 "path_in_repo": pipelinerun_config.get(
