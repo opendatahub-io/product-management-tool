@@ -1,0 +1,25 @@
+spec:
+  inputs:
+    JOB_STAGE:
+      default: drift-check
+
+---
+
+drift-check:
+  stage: $[[ inputs.JOB_STAGE ]]
+  image: registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest
+  allow_failure: true
+  tags:
+    - aipcc-k8s-cicd
+  variables:
+    KRD_REPO_URL: https://gitlab.cee.redhat.com/releng/konflux-release-data.git
+    GIT_SSL_NO_VERIFY: "true"  # AIPCC-15075: remove once runners inject RH IT CA
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    - git clone --depth 1 "$KRD_REPO_URL" /tmp/krd
+    - /opt/app-root/src/scripts/drift-check.sh
+        --configs-dir "$CI_PROJECT_DIR"
+        --krd-repo /tmp/krd
+        --all

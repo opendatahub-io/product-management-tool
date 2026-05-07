@@ -504,6 +504,38 @@ release_plan_admission:
 
 Both templates generate configurations for pull-request and push events.
 
+## Drift Detection
+
+Detect configuration drift between PMT configs (source of truth) and the actual KRD repo. The script runs PMT to generate expected KRD output, then compares against the real repo via `git diff`.
+
+### Local Usage
+
+```bash
+# Check a single product
+./scripts/drift-check.sh \
+  --configs-dir ../aipcc-product-management-configs \
+  --krd-repo ../konflux-release-data \
+  --product rhelai
+
+# Check all products
+./scripts/drift-check.sh \
+  --configs-dir ../aipcc-product-management-configs \
+  --krd-repo ../konflux-release-data \
+  --all
+```
+
+Exit code 0 means no drift; exit code 1 means drift was detected (details printed to stdout).
+
+### CI Integration
+
+Consumer repos can include the CI template to get per-product drift-check jobs on MRs and scheduled pipelines:
+
+```yaml
+include:
+  - project: 'redhat/rhel-ai/ci-cd/aipcc-product-management'
+    file: 'ci/drift-check.yml'
+```
+
 ## Development
 
 ### Running Tests
