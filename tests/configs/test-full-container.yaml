@@ -125,6 +125,7 @@ definitions:
           cpe_name: test_product
           rhel_target: el9
         single_component_mode: false
+        push_source_container_default: true
         tags:
           - "latest"
           - "{{ timestamp }}"

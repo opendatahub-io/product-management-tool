@@ -1,0 +1,108 @@
+definitions:
+  - application: test-marketplace
+    tenant: test-marketplace-tenant
+    branch: test-branch
+
+    components:
+      items:
+        - name: test-aws-disk-image
+          context: .
+          dockerfile: test.yaml
+          url: https://gitlab.com/test-org/test-marketplace-repo
+          pipelinerun:
+            - pipeline: disk-image
+              image_type: raw
+              config_toml: config/config-test.toml
+              path_context: "."
+              snyk_project_name: test-snyk
+              snyk_org: test-snyk-org
+              timeouts:
+                pipeline: "6h0m0s"
+                tasks: "4h0m0s"
+                finally: "1h0m0s"
+          rpa_values:
+            staged:
+              destination: test-destination-isos
+              version: "1.0"
+              files:
+                - filename: test-aws-1.0-{{ release_timestamp }}-x86_64.raw.gz
+                  source: disk.raw.gz
+            contentGateway:
+              productName: "Binary_RL_Test Product"
+              productCode: "TESTPROD"
+              productVersionName: "1.0.0-staging"
+              filePrefix: "test-aws-1.0"
+              contentType: disk-image
+
+    release_plan:
+      - name: test-marketplace-stage
+        grace_period: 30
+        autorelease: false
+
+    release_plan_admission:
+      rpas:
+        - name: test-marketplace-stage
+          release_type: marketplace
+          policy: test-marketplace-policy
+          cdn_env: stage
+          intention: staging
+          service_account: release-stratosphere
+          pipeline_path: pipelines/managed/push-disk-images-to-marketplaces/push-disk-images-to-marketplaces.yaml
+          cloud_marketplaces_secret: test-stratosphere-secret
+          cloud_marketplaces_pre_push: true
+          push_source_container_default: true
+          sign:
+            configMapName: hacbs-signing-pipeline-config-staging-e2e
+            cosignSecretName: konflux-cosign-signing-stage
+          product_name: "Test Marketplace Product"
+          product_version: "1.0"
+          product_id: [99999]
+          timeouts:
+            pipeline: "8h0m0s"
+            tasks: "8h0m0s"
+          components:
+            - name: test-aws-disk-image
+              rpa_values:
+                contentType: disk-image
+                staged:
+                  destination: test-destination-isos
+                  version: "1.0"
+                  files:
+                    - filename: test-aws-1.0-{{ release_timestamp }}-x86_64.raw.gz
+                      source: disk.raw.gz
+                productInfo:
+                  filePrefix: "test-aws-1.0"
+                  productCode: "TESTPROD"
+                  productName: "Test Product"
+                  productVersionName: "1.0"
+                pushSourceContainer: false
+                starmap:
+                  - cloud: aws
+                    mappings:
+                      aws-na:
+                        destinations:
+                          - architecture: x86_64
+                            destination: prod-test123
+                            overwrite: false
+                            restrict_version: true
+                        meta:
+                          description: "Provided by Test, Inc."
+                        provider: null
+                    meta:
+                      ena_support: true
+                      marketplace_entity_type: AmiProduct
+                      recommended_instance_type: p5.48xlarge
+                      root_device: /dev/sda1
+                      scanning_port: 22
+                      security_groups:
+                        - from_port: 22
+                          ip_protocol: tcp
+                          ip_ranges:
+                            - 0.0.0.0/0
+                          to_port: 22
+                      sriov_net_support: simple
+                      user_name: cloud-user
+                      virtualization: hvm
+                      volume: gp3
+                    name: test-aws
+                    workflow: stratosphere

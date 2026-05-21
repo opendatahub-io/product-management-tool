@@ -33,16 +33,18 @@ definitions:
                 tasks: "6h0m0s"
 
           rpa_values:
-            destination: test-destination-path
-            version: "1.0.0-test"
-            filename: "test-disk-{{ release_timestamp }}-x86_64-boot.iso.gz"
-            source: "test-install.iso.gz"
-            productName: "Test Disk Image Product"
-            productCode: "TESTDISK"
-            productVersion: "1.0.0-test"
-            productVersionName: "1.0.0-test-staging"
-            filePrefix: "test-disk-1.0.0"
-            contentType: "disk-image"
+            staged:
+              destination: test-destination-path
+              version: "1.0.0-test"
+              files:
+                - filename: "test-disk-{{ release_timestamp }}-x86_64-boot.iso.gz"
+                  source: "test-install.iso.gz"
+            contentGateway:
+              productName: "Test Disk Image Product"
+              productCode: "TESTDISK"
+              productVersionName: "1.0.0-test-staging"
+              filePrefix: "test-disk-1.0.0"
+              contentType: "disk-image"
 
     integration_test_scenarios:
       - template: its-ecp
@@ -70,6 +72,8 @@ definitions:
     release_plan_admission:
       common:
         single_component_mode: true
+        cdn_env: stage
+        push_source_container_default: false
         tags:
           - "test-disk-latest"
           - "test-disk-{{ timestamp }}"

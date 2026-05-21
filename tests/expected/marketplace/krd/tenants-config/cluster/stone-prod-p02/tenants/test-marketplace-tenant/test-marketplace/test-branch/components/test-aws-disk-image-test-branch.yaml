@@ -1,0 +1,21 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/request: configure-pac-no-mr
+    git-provider: gitlab
+    git-provider-url: "https://gitlab.com"
+    mintmaker.appstudio.redhat.com/disabled: true
+  name: test-aws-disk-image-test-branch
+spec:
+  application: test-marketplace-test-branch
+  componentName: test-aws-disk-image-test-branch
+  secret: pipelines-as-code-secret
+  skipGitOpsResourceGeneration: true
+  source:
+    git:
+      context: "."
+      dockerfileUrl: test.yaml
+      revision: "test-branch"
+      url: "https://gitlab.com/test-org/test-marketplace-repo"

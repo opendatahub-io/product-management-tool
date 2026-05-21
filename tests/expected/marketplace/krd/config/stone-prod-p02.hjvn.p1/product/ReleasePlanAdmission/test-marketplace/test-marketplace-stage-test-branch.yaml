@@ -1,0 +1,89 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlanAdmission
+metadata:
+  name: test-marketplace-stage-test-branch
+  namespace: rhtap-releng-tenant
+  labels:
+    pp.engineering.redhat.com/business-unit: ai
+    release.appstudio.openshift.io/block-releases: "false"
+spec:
+  applications:
+    - test-marketplace-test-branch
+  policy: test-marketplace-policy
+  data:
+    cdn:
+      env: stage
+    mapping:
+      components:
+        - name: test-aws-disk-image-test-branch
+          contentType: disk-image
+          staged:
+            destination: test-destination-isos
+            version: "1.0"
+            files:
+              - filename: test-aws-1.0-{{ release_timestamp }}-x86_64.raw.gz
+                source: disk.raw.gz
+          productInfo:
+            filePrefix: "test-aws-1.0"
+            productCode: "TESTPROD"
+            productName: "Test Product"
+            productVersionName: "1.0"
+          pushSourceContainer: false
+          starmap:
+              - cloud: aws
+                mappings:
+                  aws-na:
+                    destinations:
+                      - architecture: x86_64
+                        destination: prod-test123
+                        overwrite: false
+                        restrict_version: true
+                    meta:
+                      description: Provided by Test, Inc.
+                    provider:
+                meta:
+                  ena_support: true
+                  marketplace_entity_type: AmiProduct
+                  recommended_instance_type: p5.48xlarge
+                  root_device: /dev/sda1
+                  scanning_port: 22
+                  security_groups:
+                    - from_port: 22
+                      ip_protocol: tcp
+                      ip_ranges:
+                        - 0.0.0.0/0
+                      to_port: 22
+                  sriov_net_support: simple
+                  user_name: cloud-user
+                  virtualization: hvm
+                  volume: gp3
+                name: test-aws
+                workflow: stratosphere
+      cloudMarketplacesSecret: test-stratosphere-secret
+      cloudMarketplacesPrePush: true
+      defaults:
+        pushSourceContainer: true
+    releaseNotes:
+      product_name: Test Marketplace Product
+      product_version: "1.0"
+      product_id: [99999]
+    intention: staging
+    sign:
+      configMapName: "hacbs-signing-pipeline-config-staging-e2e"
+      cosignSecretName: konflux-cosign-signing-stage
+  origin: test-marketplace-tenant
+  pipeline:
+    pipelineRef:
+      resolver: git
+      params:
+        - name: url
+          value: "https://github.com/konflux-ci/release-service-catalog.git"
+        - name: revision
+          value: production
+        - name: pathInRepo
+          value: "pipelines/managed/push-disk-images-to-marketplaces/push-disk-images-to-marketplaces.yaml"
+    serviceAccountName: release-stratosphere
+    timeouts:
+      pipeline: "8h0m0s"
+      tasks: 8h0m0s

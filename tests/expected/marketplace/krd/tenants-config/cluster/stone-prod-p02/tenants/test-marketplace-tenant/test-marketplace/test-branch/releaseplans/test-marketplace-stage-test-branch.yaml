@@ -1,0 +1,14 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlan
+metadata:
+  labels:
+    release.appstudio.openshift.io/auto-release: "false"
+    release.appstudio.openshift.io/releasePlanAdmission: "test-marketplace-stage-test-branch"
+    release.appstudio.openshift.io/standing-attribution: "true"
+  name: test-marketplace-stage-test-branch
+  namespace: test-marketplace-tenant
+spec:
+  application: test-marketplace-test-branch
+  releaseGracePeriodDays: 30
+  target: rhtap-releng-tenant

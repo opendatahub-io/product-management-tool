@@ -14,7 +14,7 @@ spec:
   data:
     singleComponentMode: true
     cdn:
-      env: {{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}
+      env: stage
     mapping:
       components:
         - name: test-disk-component-test-disk-branch
@@ -27,11 +27,14 @@ spec:
           contentGateway:
             productName: "Test Disk Image Product"
             productCode: "TESTDISK"
-            productVersionName: "{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}"
+            productVersionName: "1.0.0-test-staging"
             filePrefix: "test-disk-1.0.0"
             contentType: disk-image
       defaults:
         pushSourceContainer: false
+        tags:
+          - "test-disk-latest"
+          - "test-disk-{{ timestamp }}"
     releaseNotes:
       product_name: Test Disk Image Suite
       product_version: "1.0.0-disk-test"

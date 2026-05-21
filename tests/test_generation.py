@@ -131,7 +131,7 @@ class TestGeneration:
 
         return differences
 
-    @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image"])
+    @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_krd_generation(self, pipeline_type):
         """Test KRD resource generation for both pipeline types."""
         config_file = self.test_dir / f"configs/test-{pipeline_type}.yaml"
@@ -161,7 +161,7 @@ class TestGeneration:
                 f"KRD generation differences for {pipeline_type}:\\n" + "\\n".join(differences)
             )
 
-    @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image"])
+    @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_pipelinerun_generation(self, pipeline_type):
         """Test pipelinerun generation for both pipeline types."""
         config_file = self.test_dir / f"configs/test-{pipeline_type}.yaml"
@@ -188,7 +188,7 @@ class TestGeneration:
                 + "\\n".join(differences)
             )
 
-    @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image"])
+    @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_end_to_end_generation(self, pipeline_type):
         """Test complete end-to-end generation (both KRD and pipelinerun)."""
         config_file = self.test_dir / f"configs/test-{pipeline_type}.yaml"
@@ -255,12 +255,13 @@ class TestMultiConfig:
         # Import collect_config_files from onboard-product.py
         config_files = onboard_product.collect_config_files(["tests/configs/test-*.yaml"], None)
 
-        # Should find test-full-container.yaml, test-disk-image.yaml, and test-developer-portal.yaml
-        assert len(config_files) == 3
+        # Should find test-full-container.yaml, test-disk-image.yaml, test-developer-portal.yaml, and test-marketplace.yaml
+        assert len(config_files) == 4
         assert all(isinstance(cf, Path) for cf in config_files)
         assert any("test-full-container.yaml" in str(cf) for cf in config_files)
         assert any("test-disk-image.yaml" in str(cf) for cf in config_files)
         assert any("test-developer-portal.yaml" in str(cf) for cf in config_files)
+        assert any("test-marketplace.yaml" in str(cf) for cf in config_files)
 
     def test_collect_config_files_config_dir(self):
         """Test collecting config files using --config-dir."""
@@ -564,6 +565,748 @@ class TestDeveloperPortal:
         )
         assert (product_dir / "1.0.yaml").exists()
         assert not (product_dir / "2.0.yaml").exists()
+
+
+class TestRPAValidation:
+    """Unit tests for RPA validation, release_type detection, and per-RPA component overrides."""
+
+    def setup_method(self):
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.temp_krd = self.temp_dir / "krd"
+        self.temp_krd.mkdir()
+        self.config = Config()
+
+    def teardown_method(self):
+        shutil.rmtree(self.temp_dir)
+
+    def _make_data(self, components, rpas, branch="main", common=None):
+        comp_items = []
+        for c in components:
+            item = {
+                "name": c["name"],
+                "context": ".",
+                "dockerfile": "Containerfile",
+                "url": "https://gitlab.com/org/repo",
+            }
+            item.update(c)
+            comp_items.append(item)
+
+        rpa_config = {"rpas": rpas}
+        if common:
+            rpa_config["common"] = common
+
+        return {
+            "definitions": [
+                {
+                    "application": "test-app",
+                    "tenant": "test-tenant",
+                    "branch": branch,
+                    "components": {"items": comp_items},
+                    "release_plan": [
+                        {"name": rpas[0]["name"], "grace_period": 7, "autorelease": False}
+                    ],
+                    "release_plan_admission": rpa_config,
+                }
+            ]
+        }
+
+    def _render(self, data):
+        render_krd_templates(
+            data,
+            str(self.config["krd_template_dir"]),
+            str(self.temp_krd),
+            self.config["cluster"],
+            recreate=False,
+        )
+
+    def _read_rpa(self, name):
+        rpa_dir = (
+            self.temp_krd
+            / "config"
+            / f"{self.config['cluster']}.hjvn.p1"
+            / "product"
+            / "ReleasePlanAdmission"
+            / "test"
+        )
+        rpa_file = rpa_dir / f"{name}.yaml"
+        assert rpa_file.exists(), f"RPA file not found: {rpa_file}"
+        with open(rpa_file) as f:
+            return yaml.load(f)
+
+    # --- release_type auto-detection ---
+
+    def test_release_type_auto_detect_cdn_from_disk_image_pipeline(self):
+        """disk-image build pipeline auto-detects to release_type=cdn."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "disk-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "dest",
+                            "version": "1.0",
+                            "files": [{"filename": "f.iso", "source": "s.iso"}],
+                        },
+                        "contentGateway": {
+                            "productName": "P",
+                            "productCode": "C",
+                            "productVersionName": "1.0",
+                            "filePrefix": "p",
+                            "contentType": "disk-image",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "pipelines/cdn.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-stage")
+        comp = rpa["spec"]["data"]["mapping"]["components"][0]
+        assert "contentGateway" in comp
+        assert "repositories" not in comp
+
+    def test_release_type_auto_detect_container_from_full_container_pipeline(self):
+        """full-container build pipeline auto-detects to release_type=container."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "cont-comp",
+                    "pipelinerun": [{"pipeline": "full-container"}],
+                    "stage_repository": "quay.io/org/stage",
+                    "prod_repository": "quay.io/org/prod",
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "pipelines/container.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-stage")
+        comp = rpa["spec"]["data"]["mapping"]["components"][0]
+        assert "repositories" in comp
+        assert "contentGateway" not in comp
+
+    def test_release_type_explicit_overrides_auto_detect(self):
+        """Explicit release_type on RPA overrides auto-detection from build pipeline."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "disk-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "raw"}],
+                    "rpa_values": {
+                        "contentType": "disk-image",
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "productInfo": {
+                            "filePrefix": "p",
+                            "productCode": "C",
+                            "productName": "N",
+                            "productVersionName": "1.0",
+                        },
+                        "starmap": [{"cloud": "aws"}],
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-marketplace-stage",
+                    "release_type": "marketplace",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "pipelines/marketplace.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                    "components": ["disk-comp"],
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-marketplace-stage")
+        comp = rpa["spec"]["data"]["mapping"]["components"][0]
+        assert "productInfo" in comp
+        assert "starmap" in comp
+        assert "contentGateway" not in comp
+
+    # --- validation errors ---
+
+    def test_cdn_missing_rpa_values_raises(self):
+        """CDN release with component missing rpa_values raises ValueError."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "disk-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        with pytest.raises(ValueError, match="missing required 'rpa_values'"):
+            self._render(data)
+
+    def test_cdn_missing_staged_raises(self):
+        """CDN release with rpa_values missing 'staged' block raises ValueError."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "disk-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "contentGateway": {
+                            "productName": "P",
+                            "productCode": "C",
+                            "productVersionName": "1.0",
+                            "filePrefix": "p",
+                            "contentType": "disk-image",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        with pytest.raises(ValueError, match="missing required 'staged'"):
+            self._render(data)
+
+    def test_cdn_missing_content_gateway_raises(self):
+        """CDN release with rpa_values missing 'contentGateway' raises ValueError."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "disk-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        with pytest.raises(ValueError, match="missing required 'contentGateway'"):
+            self._render(data)
+
+    def test_marketplace_missing_product_info_raises(self):
+        """Marketplace release missing 'productInfo' raises ValueError."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "raw"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "starmap": [{"cloud": "aws"}],
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "release_type": "marketplace",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                    "components": ["comp"],
+                }
+            ],
+        )
+        with pytest.raises(ValueError, match="missing required 'productInfo'"):
+            self._render(data)
+
+    def test_marketplace_missing_starmap_raises(self):
+        """Marketplace release missing 'starmap' raises ValueError."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "raw"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "productInfo": {
+                            "filePrefix": "p",
+                            "productCode": "C",
+                            "productName": "N",
+                            "productVersionName": "1.0",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "release_type": "marketplace",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                    "components": ["comp"],
+                }
+            ],
+        )
+        with pytest.raises(ValueError, match="missing required 'starmap'"):
+            self._render(data)
+
+    # --- per-RPA component overrides ---
+
+    def test_per_rpa_component_override_replaces_rpa_values(self):
+        """Per-RPA component rpa_values override replaces component-level rpa_values."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "disk-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "raw"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "cdn-dest",
+                            "version": "3.4",
+                            "files": [{"filename": "cdn.raw.gz", "source": "disk.raw.gz"}],
+                        },
+                        "contentGateway": {
+                            "productName": "CDN Product",
+                            "productCode": "CDN",
+                            "productVersionName": "3.4.0",
+                            "filePrefix": "cdn-prefix",
+                            "contentType": "disk-image",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-marketplace-stage",
+                    "release_type": "marketplace",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "pipelines/marketplace.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                    "components": [
+                        {
+                            "name": "disk-comp",
+                            "rpa_values": {
+                                "contentType": "disk-image",
+                                "staged": {
+                                    "destination": "mkt-dest",
+                                    "version": "3.4.0",
+                                    "files": [{"filename": "mkt.raw.gz", "source": "disk.raw.gz"}],
+                                },
+                                "productInfo": {
+                                    "filePrefix": "mkt-prefix",
+                                    "productCode": "MKT",
+                                    "productName": "Mkt Product",
+                                    "productVersionName": "3.4.0",
+                                },
+                                "starmap": [
+                                    {"cloud": "aws", "name": "test-aws", "workflow": "stratosphere"}
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-marketplace-stage")
+        comp = rpa["spec"]["data"]["mapping"]["components"][0]
+        assert comp["staged"]["destination"] == "mkt-dest"
+        assert comp["staged"]["version"] == "3.4.0"
+        assert comp["productInfo"]["productCode"] == "MKT"
+        assert "contentGateway" not in comp
+
+    def test_per_rpa_string_filter_uses_component_rpa_values(self):
+        """String entries in RPA components list act as name filter, using component-level rpa_values."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp-a",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d-a",
+                            "version": "1.0",
+                            "files": [{"filename": "a.iso", "source": "s.iso"}],
+                        },
+                        "contentGateway": {
+                            "productName": "A",
+                            "productCode": "A",
+                            "productVersionName": "1.0",
+                            "filePrefix": "a",
+                            "contentType": "disk-image",
+                        },
+                    },
+                },
+                {
+                    "name": "comp-b",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d-b",
+                            "version": "2.0",
+                            "files": [{"filename": "b.iso", "source": "s.iso"}],
+                        },
+                        "contentGateway": {
+                            "productName": "B",
+                            "productCode": "B",
+                            "productVersionName": "2.0",
+                            "filePrefix": "b",
+                            "contentType": "disk-image",
+                        },
+                    },
+                },
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                    "components": ["comp-a"],
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-stage")
+        comps = rpa["spec"]["data"]["mapping"]["components"]
+        assert len(comps) == 1
+        assert comps[0]["staged"]["destination"] == "d-a"
+
+    def test_mixed_string_and_object_components(self):
+        """RPA components list can mix string filters and object overrides."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "cdn-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "contentType": "disk-image",
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "productInfo": {
+                            "filePrefix": "p",
+                            "productCode": "C",
+                            "productName": "N",
+                            "productVersionName": "1.0",
+                        },
+                        "starmap": [{"cloud": "aws"}],
+                    },
+                },
+                {
+                    "name": "mkt-comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "raw"}],
+                },
+            ],
+            rpas=[
+                {
+                    "name": "test-marketplace-stage",
+                    "release_type": "marketplace",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                    "components": [
+                        "cdn-comp",
+                        {
+                            "name": "mkt-comp",
+                            "rpa_values": {
+                                "contentType": "disk-image",
+                                "staged": {
+                                    "destination": "d2",
+                                    "version": "2.0",
+                                    "files": [{"filename": "f2", "source": "s2"}],
+                                },
+                                "productInfo": {
+                                    "filePrefix": "p2",
+                                    "productCode": "C2",
+                                    "productName": "N2",
+                                    "productVersionName": "2.0",
+                                },
+                                "starmap": [{"cloud": "azure"}],
+                            },
+                        },
+                    ],
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-marketplace-stage")
+        comps = rpa["spec"]["data"]["mapping"]["components"]
+        assert len(comps) == 2
+        assert comps[0]["staged"]["destination"] == "d"
+        assert comps[1]["staged"]["destination"] == "d2"
+
+    # --- CDN env is explicit, no guesswork ---
+
+    def test_cdn_env_not_auto_generated(self):
+        """CDN env is NOT auto-generated from intention — must be explicit."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "contentGateway": {
+                            "productName": "P",
+                            "productCode": "C",
+                            "productVersionName": "1.0",
+                            "filePrefix": "p",
+                            "contentType": "disk-image",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                    # cdn_env intentionally omitted
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-stage")
+        assert "cdn" not in rpa["spec"]["data"]
+
+    def test_cdn_env_explicit_renders(self):
+        """Explicit cdn_env renders the cdn block."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "contentGateway": {
+                            "productName": "P",
+                            "productCode": "C",
+                            "productVersionName": "1.0",
+                            "filePrefix": "p",
+                            "contentType": "disk-image",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "cdn_env": "production",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "production",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-stage")
+        assert rpa["spec"]["data"]["cdn"]["env"] == "production"
+
+    # --- pushSourceContainer defaults ---
+
+    def test_push_source_container_default_false_for_cdn(self):
+        """pushSourceContainer defaults to false for CDN release type."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "contentGateway": {
+                            "productName": "P",
+                            "productCode": "C",
+                            "productVersionName": "1.0",
+                            "filePrefix": "p",
+                            "contentType": "disk-image",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "cdn_env": "stage",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-stage")
+        assert rpa["spec"]["data"]["mapping"]["defaults"]["pushSourceContainer"] is False
+
+    def test_push_source_container_default_true_for_container(self):
+        """pushSourceContainer defaults to true for container release type."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp",
+                    "pipelinerun": [{"pipeline": "full-container"}],
+                    "stage_repository": "quay.io/org/stage",
+                    "prod_repository": "quay.io/org/prod",
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        self._render(data)
+        rpa = self._read_rpa("test-stage")
+        assert rpa["spec"]["data"]["mapping"]["defaults"]["pushSourceContainer"] is True
+
+    def test_invalid_release_type_raises(self):
+        """Invalid release_type value raises ValueError."""
+        data = self._make_data(
+            components=[
+                {
+                    "name": "comp",
+                    "pipelinerun": [{"pipeline": "disk-image", "image_type": "iso"}],
+                    "rpa_values": {
+                        "staged": {
+                            "destination": "d",
+                            "version": "1.0",
+                            "files": [{"filename": "f", "source": "s"}],
+                        },
+                        "contentGateway": {
+                            "productName": "P",
+                            "productCode": "C",
+                            "productVersionName": "1.0",
+                            "filePrefix": "fp",
+                            "contentType": "disk-image",
+                        },
+                    },
+                }
+            ],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "release_type": "cdnn",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        with pytest.raises(ValueError, match="Invalid release_type 'cdnn'"):
+            self._render(data)
 
 
 if __name__ == "__main__":

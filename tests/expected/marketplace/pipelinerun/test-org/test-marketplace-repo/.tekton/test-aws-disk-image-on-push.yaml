@@ -1,0 +1,66 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  annotations:
+    build.appstudio.openshift.io/repo: https://gitlab.com/test-org/test-marketplace-repo/-/tree/{{revision}}
+    build.appstudio.redhat.com/commit_sha: "{{revision}}"
+    build.appstudio.redhat.com/target_branch: "{{target_branch}}"
+    pipelinesascode.tekton.dev/cancel-in-progress: "false"
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "push" && target_branch == "test-branch" && (
+          ".tekton/test-aws-disk-image-on-push.yaml".pathChanged() ||
+          "test.yaml".pathChanged() ||
+          "config/config-test.toml".pathChanged()
+      )
+  labels:
+    appstudio.openshift.io/application: test-marketplace-test-branch
+    appstudio.openshift.io/component: test-aws-disk-image-test-branch
+    pipelines.appstudio.openshift.io/type: build
+  name: test-aws-disk-image-test-branch-on-push
+  namespace: test-marketplace-tenant
+spec:
+  timeouts:
+    pipeline: "6h0m0s"
+    tasks: "4h0m0s"
+    finally: "1h0m0s"
+  params:
+  - name: git-url
+    value: "{{source_url}}"
+  - name: revision
+    value: "{{revision}}"
+  - name: output-image
+    value: quay.io/redhat-user-workloads/test-marketplace-tenant/test-marketplace-test-branch/test-aws-disk-image-test-branch:{{revision}}
+  - name: path-context
+    value: .
+  - name: image-type
+    value: raw
+  - name: config-toml
+    value: config/config-test.toml
+  - name: bib-file
+    value: test.yaml
+  pipelineRef:
+    params:
+    - name: org
+      value: redhat
+    - name: repo
+      value: rhel-ai/konflux-data
+    - name: scmType
+      value: gitlab
+    - name: serverURL
+      value: https://gitlab.com
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: pipelines/disk-image.yaml
+    - name: token
+      value: pipelines-as-code-secret
+    - name: tokenKey
+      value: password
+    resolver: git
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-test-aws-disk-image-test-branch
+  workspaces:
+  - name: git-auth
+    secret:
+      secretName: "{{ git_auth_secret }}"

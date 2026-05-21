@@ -1,0 +1,21 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ImageRepository
+metadata:
+  annotations:
+    image-controller.appstudio.redhat.com/update-component-image: "true"
+  labels:
+    appstudio.redhat.com/application: test-marketplace-test-branch
+    appstudio.redhat.com/component: test-aws-disk-image-test-branch
+  name: test-aws-disk-image-test-branch
+  namespace: test-marketplace-tenant
+spec:
+  image:
+    name: test-marketplace-tenant/test-marketplace-test-branch/test-aws-disk-image-test-branch
+    visibility: private
+  notifications:
+    - config:
+        url: https://bombino.api.redhat.com/v1/sbom/quay/push
+      event: repo_push
+      method: webhook
+      title: SBOM-event-to-Bombino

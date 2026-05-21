@@ -18,30 +18,52 @@ spec:
     - [[ application_name ]]
   policy: [[ policy_name ]]
   data:
+{%- if single_component_mode is not none %}
     singleComponentMode: [[ single_component_mode ]]
-{%- if rpa_pipeline_type == "disk-image" %}
+{%- endif %}
+{%- if cdn_env %}
     cdn:
-      env: {% if "stage" in release_plan_admission_name %}stage{% elif "prod" in release_plan_admission_name %}production{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}
+      env: [[ cdn_env ]]
 {%- endif %}
     mapping:
       components:
 {%- for component in components %}
-{%- if rpa_pipeline_type == "disk-image" %}
+{%- if component.rpa_values is defined %}
         - name: [[ component.name ]]
+{%- if component.rpa_values.contentType is defined %}
+          contentType: [[ component.rpa_values.contentType ]]
+{%- endif %}
           staged:
-            destination: [[ component.rpa_values.destination ]]
-            version: "[[ component.rpa_values.version ]]"
+            destination: [[ component.rpa_values.staged.destination ]]
+            version: "[[ component.rpa_values.staged.version ]]"
             files:
-              - filename: [[ component.rpa_values.filename ]]
-                source: [[ component.rpa_values.source ]]
+{%- for file in component.rpa_values.staged.files %}
+              - filename: [[ file.filename ]]
+                source: [[ file.source ]]
+{%- endfor %}
+{%- if component.rpa_values.contentGateway is defined %}
           contentGateway:
-            productName: "[[ component.rpa_values.productName ]]"
-            productCode: "[[ component.rpa_values.productCode ]]"
-            productVersionName: "{% if "stage" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]-staging{% elif "prod" in release_plan_admission_name %}[[ component.rpa_values.productVersion ]]{% else %}{{ error("RPA name must contain 'stage' or 'prod' for disk-image pipeline") }}{% endif %}"
-            filePrefix: "[[ component.rpa_values.filePrefix ]]"
-            contentType: [[ component.rpa_values.contentType ]]
-{%- if component.pushSourceContainer is defined %}
+            productName: "[[ component.rpa_values.contentGateway.productName ]]"
+            productCode: "[[ component.rpa_values.contentGateway.productCode ]]"
+            productVersionName: "[[ component.rpa_values.contentGateway.productVersionName ]]"
+            filePrefix: "[[ component.rpa_values.contentGateway.filePrefix ]]"
+            contentType: [[ component.rpa_values.contentGateway.contentType ]]
+{%- endif %}
+{%- if component.rpa_values.productInfo is defined %}
+          productInfo:
+            filePrefix: "[[ component.rpa_values.productInfo.filePrefix ]]"
+            productCode: "[[ component.rpa_values.productInfo.productCode ]]"
+            productName: "[[ component.rpa_values.productInfo.productName ]]"
+            productVersionName: "[[ component.rpa_values.productInfo.productVersionName ]]"
+{%- endif %}
+{%- if component.rpa_values.pushSourceContainer is defined %}
+          pushSourceContainer: [[ component.rpa_values.pushSourceContainer | lower ]]
+{%- elif component.pushSourceContainer is defined %}
           pushSourceContainer: [[ component.pushSourceContainer | lower ]]
+{%- endif %}
+{%- if component.rpa_values.starmap is defined %}
+          starmap:
+[[ component.rpa_values.starmap | to_yaml(12) ]]
 {%- endif %}
 {%- else %}
         - name: [[ component.name ]]
@@ -52,16 +74,17 @@ spec:
 {%- endif %}
 {%- endif %}
 {%- endfor %}
-{%- if rpa_pipeline_type == "full-container" %}
+{%- if cloud_marketplaces_secret %}
+      cloudMarketplacesSecret: [[ cloud_marketplaces_secret ]]
+      cloudMarketplacesPrePush: [[ cloud_marketplaces_pre_push | lower ]]
+{%- endif %}
       defaults:
-        pushSourceContainer: true
+        pushSourceContainer: [[ push_source_container_default | lower ]]
+{%- if tags %}
         tags:
 {%- for tag in tags %}
           - "[[ tag ]]"
 {%- endfor %}
-{%- elif rpa_pipeline_type == "disk-image" %}
-      defaults:
-        pushSourceContainer: false
 {%- endif %}
     releaseNotes:
       product_name: [[ product_name ]]
@@ -71,7 +94,11 @@ spec:
 {%- if "rh-advisories" in pipeline_path %}
     enforceContainerFirstSecurityLabels: true
 {%- endif %}
-{%- if is_tech_preview or use_beta_keys %}
+{%- if sign %}
+    sign:
+      configMapName: "[[ sign.configMapName ]]"
+      cosignSecretName: [[ sign.cosignSecretName ]]
+{%- elif is_tech_preview or use_beta_keys %}
     sign:
       configMapName: "hacbs-signing-pipeline-config-redhatbeta2"
       cosignSecretName: konflux-cosign-signing-production
@@ -82,9 +109,9 @@ spec:
       resolver: git
       params:
         - name: url
-          value: "https://github.com/konflux-ci/release-service-catalog.git"
+          value: "[[ pipeline_url ]]"
         - name: revision
-          value: production
+          value: [[ pipeline_revision ]]
         - name: pathInRepo
           value: "[[ pipeline_path ]]"
     serviceAccountName: [[ service_account_name ]]

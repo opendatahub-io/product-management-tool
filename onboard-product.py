@@ -31,6 +31,7 @@ import os
 import shutil
 import subprocess
 import sys
+from io import StringIO
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -43,6 +44,10 @@ yaml = YAML()
 yaml.indent(mapping=2, sequence=4, offset=2)
 yaml.explicit_start = True
 yaml.width = 4096
+
+_yaml_inline = YAML()
+_yaml_inline.indent(mapping=2, sequence=4, offset=2)
+_yaml_inline.width = 4096
 
 
 def canonicalize(value):
@@ -356,6 +361,16 @@ def yaml_value(value):
         return f'"{str(value)}"'
 
 
+def to_yaml_filter(value, indent=0):
+    stream = StringIO()
+    _yaml_inline.dump(value, stream)
+    result = stream.getvalue().rstrip("\n")
+    if indent > 0:
+        lines = result.split("\n")
+        return "\n".join((" " * indent + line) for line in lines)
+    return result
+
+
 def create_jinja_env(template_dir):
     """
     Create standardized Jinja2 environment with custom delimiters.
@@ -375,6 +390,7 @@ def create_jinja_env(template_dir):
         variable_end_string="]]",
     )
     env.filters["yaml_value"] = yaml_value
+    env.filters["to_yaml"] = to_yaml_filter
     return env
 
 
@@ -1177,25 +1193,56 @@ def render_krd_templates(
             is_tech_preview_rpa = "tech-preview" in rpa_name or "tech_preview" in rpa_name
             is_stage_rpa = "stage" in rpa_name
 
-            # Detect pipeline types for RPA template selection
-            pipeline_types = set()
-            for component in components:
-                for pipelinerun_config in component.get("pipelinerun", []):
-                    pipeline_types.add(pipelinerun_config["pipeline"])
+            # Determine release type: explicit override or auto-detect from build pipeline
+            if "release_type" in rpa:
+                release_type = rpa["release_type"]
+            elif "pipeline_type" in rpa:
+                release_type = rpa["pipeline_type"]
+            else:
+                pipeline_types = set()
+                for component in components:
+                    for pipelinerun_config in component.get("pipelinerun", []):
+                        pipeline_types.add(pipelinerun_config["pipeline"])
 
-            # Validate that all components use the same pipeline type
-            if len(pipeline_types) > 1:
+                if len(pipeline_types) > 1:
+                    raise ValueError(
+                        f"Mixed pipeline types found in application '{versioned_app_name}': {pipeline_types}. All components must use the same pipeline type for RPA generation."
+                    )
+
+                build_pipeline = pipeline_types.pop() if pipeline_types else "full-container"
+                release_type = "cdn" if build_pipeline == "disk-image" else "container"
+
+            valid_release_types = {"cdn", "marketplace", "container"}
+            if release_type not in valid_release_types:
                 raise ValueError(
-                    f"Mixed pipeline types found in application '{versioned_app_name}': {pipeline_types}. All components must use the same pipeline type for RPA generation."
+                    f"Invalid release_type '{release_type}' for RPA '{rpa_name}'. "
+                    f"Valid values: {sorted(valid_release_types)}"
                 )
 
-            rpa_pipeline_type = pipeline_types.pop() if pipeline_types else "full-container"
+            # Parse per-RPA component entries (list of strings or objects with overrides)
+            rpa_components_raw = rpa.get("components", None)
+            rpa_component_filter = None
+            rpa_component_overrides = {}
+            if rpa_components_raw:
+                rpa_component_filter = set()
+                for entry in rpa_components_raw:
+                    if isinstance(entry, str):
+                        rpa_component_filter.add(entry)
+                    elif isinstance(entry, dict):
+                        name = entry["name"]
+                        rpa_component_filter.add(name)
+                        if "rpa_values" in entry:
+                            rpa_component_overrides[name] = entry["rpa_values"]
 
             # Prepare components for RPA template
             updated_components = []
             for component in components:
                 base_component_name = component["name"]
                 component_name = get_component_name(base_component_name, branch)
+
+                # Apply per-RPA component filter
+                if rpa_component_filter and base_component_name not in rpa_component_filter:
+                    continue
 
                 # Check if component is marked for tech preview
                 is_tech_preview_component = component.get("tech_preview", False)
@@ -1205,17 +1252,16 @@ def render_krd_templates(
                 # - Tech preview prod RPA: only include tech_preview=true components
                 # - Regular prod RPA: only include tech_preview=false (or omitted) components
                 if is_stage_rpa:
-                    pass  # Include all components in stage RPA
+                    pass
                 elif is_tech_preview_rpa and not is_tech_preview_component:
-                    continue  # Skip non-tech-preview components for tech preview RPA
+                    continue
                 elif not is_tech_preview_rpa and is_tech_preview_component:
-                    continue  # Skip tech-preview components for regular prod RPA
+                    continue
 
-                # For prod RPAs (non-stage), skip full-container components without prod_repository
-                # Disk-image components use rpa_values instead and don't need prod_repository
+                # For container RPAs (non-stage), skip components without prod_repository
                 if (
                     not is_stage_rpa
-                    and rpa_pipeline_type == "full-container"
+                    and release_type == "container"
                     and "prod_repository" not in component
                 ):
                     continue
@@ -1223,34 +1269,45 @@ def render_krd_templates(
                 updated_component = component.copy()
                 updated_component["name"] = component_name
 
-                # Validate rpa_values for disk-image components
-                if rpa_pipeline_type == "disk-image":
-                    if "rpa_values" not in component:
+                # Apply per-RPA rpa_values override if present
+                if base_component_name in rpa_component_overrides:
+                    updated_component["rpa_values"] = rpa_component_overrides[base_component_name]
+
+                # Validate rpa_values for cdn release type
+                if release_type == "cdn":
+                    if "rpa_values" not in updated_component:
                         raise ValueError(
-                            f"Component '{component_name}' uses disk-image pipeline but missing required 'rpa_values' section"
+                            f"Component '{component_name}' in CDN RPA but missing required 'rpa_values' section"
+                        )
+                    rpa_values = updated_component["rpa_values"]
+                    if "staged" not in rpa_values:
+                        raise ValueError(
+                            f"Component '{component_name}' missing required 'staged' block in rpa_values"
+                        )
+                    if "contentGateway" not in rpa_values:
+                        raise ValueError(
+                            f"Component '{component_name}' missing required 'contentGateway' block in rpa_values for CDN release"
                         )
 
-                    rpa_values = component["rpa_values"]
-                    required_fields = [
-                        "destination",
-                        "version",
-                        "filename",
-                        "source",
-                        "productName",
-                        "productCode",
-                        "productVersion",
-                        "filePrefix",
-                    ]
-                    missing_fields = [field for field in required_fields if field not in rpa_values]
-                    if missing_fields:
+                # Validate rpa_values for marketplace release type
+                if release_type == "marketplace":
+                    if "rpa_values" not in updated_component:
                         raise ValueError(
-                            f"Component '{component_name}' missing required rpa_values fields: {missing_fields}"
+                            f"Component '{component_name}' in marketplace RPA but missing required 'rpa_values' section"
                         )
-
-                    # Set default contentType
-                    if "contentType" not in rpa_values:
-                        updated_component["rpa_values"] = rpa_values.copy()
-                        updated_component["rpa_values"]["contentType"] = "disk-image"
+                    rpa_values = updated_component["rpa_values"]
+                    if "staged" not in rpa_values:
+                        raise ValueError(
+                            f"Component '{component_name}' missing required 'staged' block in rpa_values"
+                        )
+                    if "productInfo" not in rpa_values:
+                        raise ValueError(
+                            f"Component '{component_name}' missing required 'productInfo' in rpa_values for marketplace release"
+                        )
+                    if "starmap" not in rpa_values:
+                        raise ValueError(
+                            f"Component '{component_name}' missing required 'starmap' in rpa_values for marketplace release"
+                        )
 
                 updated_components.append(updated_component)
 
@@ -1262,7 +1319,10 @@ def render_krd_templates(
                 application_name=versioned_app_name,
                 release_plan_admission_name=rpa_name,
                 policy_name=rpa["policy"],
-                single_component_mode=str(rpa.get("single_component_mode", False)).lower(),
+                single_component_mode=str(rpa["single_component_mode"]).lower()
+                if "single_component_mode" in rpa
+                else None,
+                cdn_env=rpa.get("cdn_env"),
                 tags=rpa.get("tags", []),
                 product_name=rpa["product_name"],
                 product_version=rpa["product_version"],
@@ -1272,9 +1332,20 @@ def render_krd_templates(
                 components=updated_components,
                 service_account_name=rpa["service_account"],
                 pipeline_path=rpa["pipeline_path"],
-                rpa_pipeline_type=rpa_pipeline_type,
+                pipeline_url=rpa.get(
+                    "pipeline_url",
+                    "https://github.com/konflux-ci/release-service-catalog.git",
+                ),
+                pipeline_revision=rpa.get("pipeline_revision", "production"),
                 is_tech_preview=is_tech_preview_rpa,
                 use_beta_keys=rpa.get("use_beta_keys", False),
+                sign=rpa.get("sign", None),
+                cloud_marketplaces_secret=rpa.get("cloud_marketplaces_secret", ""),
+                cloud_marketplaces_pre_push=rpa.get("cloud_marketplaces_pre_push", False),
+                push_source_container_default=rpa.get(
+                    "push_source_container_default",
+                    False if release_type in ("cdn", "marketplace") else True,
+                ),
                 annotations=annotations,
                 pipeline_timeout=rpa_timeouts.get("pipeline", "4h0m0s"),
                 tasks_timeout=rpa_timeouts.get("tasks", "4h0m0s"),

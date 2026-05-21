@@ -1,0 +1,7 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Application
+metadata:
+  name: test-marketplace-test-branch
+spec:
+  displayName: test-marketplace-test-branch
