@@ -101,6 +101,45 @@ def test_get_branch_info_main_branch():
 
 
 # ---------------------------------------------------------------------------
+# get_extra_pipelinerun_params
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "params, branch, expected_names",
+    [
+        pytest.param([], "3.5-EA1", ["stable-release"], id="ea-uppercase"),
+        pytest.param([], "3.4-ea2", ["stable-release"], id="ea-lowercase"),
+        pytest.param([], "3.5-fast1", ["stable-release"], id="fast-lowercase"),
+        pytest.param([], "3.5-FAST1", ["stable-release"], id="fast-uppercase"),
+        pytest.param([], "main", [], id="main-branch"),
+        pytest.param([], "3.4", [], id="ga-branch"),
+        pytest.param(
+            [{"name": "snyk-org", "value": "x"}],
+            "3.5-EA1",
+            ["snyk-org", "stable-release"],
+            id="preserves-existing-params",
+        ),
+        pytest.param(
+            [{"name": "stable-release", "value": "false"}],
+            "3.5-EA1",
+            ["stable-release"],
+            id="no-duplicate-if-already-set",
+        ),
+    ],
+)
+def test_get_extra_pipelinerun_params(params, branch, expected_names):
+    result = onboard_product.get_extra_pipelinerun_params(params, branch)
+    assert [p["name"] for p in result] == expected_names
+
+
+def test_get_extra_pipelinerun_params_does_not_mutate_input():
+    original = [{"name": "snyk-org", "value": "x"}]
+    onboard_product.get_extra_pipelinerun_params(original, "3.5-EA1")
+    assert len(original) == 1
+
+
+# ---------------------------------------------------------------------------
 # yaml_value
 # ---------------------------------------------------------------------------
 

@@ -167,6 +167,26 @@ def collect_config_files(config_patterns, config_dir):
     return config_files
 
 
+def get_extra_pipelinerun_params(pipelinerun_params, branch):
+    """Inject stable-release=false parameter for non-stable branches.
+
+    When generating PipelineRuns for non-stable branches (EA or "fast"), we
+    inject a special "stable-release=false" parameter. We can use this
+    parameter to run (or skip) additional content checks. For example, when
+    this "stable-release" parameter is true, we execute the
+    "assert-all-images-are-stable" Task.
+
+    See AIPCC-15422.
+    """
+    result = list(pipelinerun_params)
+    branch_lower = branch.lower()
+    if "-ea" in branch_lower or "-fast" in branch_lower:
+        # Config authors may also set this manually. Avoid duplicates:
+        if not any(p.get("name") == "stable-release" for p in result):
+            result.append({"name": "stable-release", "value": "false"})
+    return result
+
+
 def get_application_name(base_name, branch):
     """
     Generate application name with branch suffix for non-main branches.
@@ -801,7 +821,9 @@ def render_pipelinerun_templates(
                         "build_nudge_files": build_nudge_files,
                         "image_expires_after": image_expires_after,
                         "labels": pipelinerun_labels,
-                        "extra_params": pipelinerun_config.get("params", []),
+                        "extra_params": get_extra_pipelinerun_params(
+                            pipelinerun_config.get("params", []), branch
+                        ),
                     }
 
                     # Add parameters specific to each pipeline type
