@@ -4,7 +4,7 @@ kind: ReleasePlan
 metadata:
 {%- if autorelease_annotation %}
   annotations:
-    release.appstudio.openshift.io/auto-release: "{%- for component in components -%}UpdatedComponentIs('[[ component ]]'){%- if not loop.last %} || {% endif -%}{%- endfor -%}"
+    release.appstudio.openshift.io/auto-release: "{%- for component in components -%}updatedComponentIs('[[ component ]]'){%- if not loop.last %} || {% endif -%}{%- endfor -%}"
 {%- endif %}
   labels:
 {%- if not autorelease_annotation %}
