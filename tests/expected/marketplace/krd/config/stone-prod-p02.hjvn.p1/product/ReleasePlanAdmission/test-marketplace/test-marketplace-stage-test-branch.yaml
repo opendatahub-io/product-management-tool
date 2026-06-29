@@ -31,35 +31,35 @@ spec:
             productVersionName: "1.0"
           pushSourceContainer: false
           starmap:
-              - cloud: aws
-                mappings:
-                  aws-na:
-                    destinations:
-                      - architecture: x86_64
-                        destination: prod-test123
-                        overwrite: false
-                        restrict_version: true
-                    meta:
-                      description: Provided by Test, Inc.
-                    provider:
-                meta:
-                  ena_support: true
-                  marketplace_entity_type: AmiProduct
-                  recommended_instance_type: p5.48xlarge
-                  root_device: /dev/sda1
-                  scanning_port: 22
-                  security_groups:
-                    - from_port: 22
-                      ip_protocol: tcp
-                      ip_ranges:
-                        - 0.0.0.0/0
-                      to_port: 22
-                  sriov_net_support: simple
-                  user_name: cloud-user
-                  virtualization: hvm
-                  volume: gp3
-                name: test-aws
-                workflow: stratosphere
+            - cloud: aws
+              mappings:
+                aws-na:
+                  destinations:
+                    - architecture: x86_64
+                      destination: prod-test123
+                      overwrite: false
+                      restrict_version: true
+                  meta:
+                    description: Provided by Test, Inc.
+                  provider:
+              meta:
+                ena_support: true
+                marketplace_entity_type: AmiProduct
+                recommended_instance_type: p5.48xlarge
+                root_device: /dev/sda1
+                scanning_port: 22
+                security_groups:
+                  - from_port: 22
+                    ip_protocol: tcp
+                    ip_ranges:
+                      - 0.0.0.0/0
+                    to_port: 22
+                sriov_net_support: simple
+                user_name: cloud-user
+                virtualization: hvm
+                volume: gp3
+              name: test-aws
+              workflow: stratosphere
       cloudMarketplacesSecret: test-stratosphere-secret
       cloudMarketplacesPrePush: true
       defaults:

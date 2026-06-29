@@ -31,6 +31,7 @@ import os
 import shutil
 import subprocess
 import sys
+import textwrap
 from io import StringIO
 from pathlib import Path
 from urllib.parse import urlparse
@@ -366,6 +367,7 @@ def to_yaml_filter(value, indent=0):
     _yaml_inline.dump(value, stream)
     result = stream.getvalue().rstrip("\n")
     if indent > 0:
+        result = textwrap.dedent(result)
         lines = result.split("\n")
         return "\n".join((" " * indent + line) for line in lines)
     return result
