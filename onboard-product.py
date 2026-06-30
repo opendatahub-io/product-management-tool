@@ -31,7 +31,6 @@ import os
 import shutil
 import subprocess
 import sys
-import textwrap
 from io import StringIO
 from pathlib import Path
 from urllib.parse import urlparse
@@ -49,6 +48,10 @@ yaml.width = 4096
 _yaml_inline = YAML()
 _yaml_inline.indent(mapping=2, sequence=4, offset=2)
 _yaml_inline.width = 4096
+
+_yaml_for_filter = YAML()
+_yaml_for_filter.indent(mapping=2, sequence=4, offset=2)
+_yaml_for_filter.width = 4096
 
 
 def canonicalize(value):
@@ -118,13 +121,14 @@ def get_directory_resources(directory):
     return sorted(resources)
 
 
-def collect_config_files(config_patterns, config_dir):
+def collect_config_files(config_patterns, config_dir, include_parent=False):
     """
     Collect all config files from patterns and directory.
 
     Args:
         config_patterns (list): List of file paths or glob patterns (can be None)
         config_dir (Path): Directory to scan for YAML files (can be None)
+        include_parent (bool): Also scan the parent of config_dir for YAML files
 
     Returns:
         list: Sorted list of Path objects for config files
@@ -158,6 +162,13 @@ def collect_config_files(config_patterns, config_dir):
         # Filter out hidden/backup files
         yaml_files = [f.resolve() for f in yaml_files if not f.name.startswith((".", "_", "~"))]
         config_files.extend(yaml_files)
+
+        if include_parent:
+            parent = config_dir.resolve().parent
+            parent_yamls = [
+                f.resolve() for f in parent.glob("*.yaml") if not f.name.startswith((".", "_", "~"))
+            ]
+            config_files.extend(parent_yamls)
 
     # Remove duplicates (after resolving paths) and sort
     config_files = sorted(set(config_files))
@@ -237,6 +248,8 @@ def normalize_rpa_config(rpa_config):
             {"name": "prod", "tags": ["v1", "v2", "stable"]}
         ]
     """
+    if not rpa_config:
+        return []
     if not isinstance(rpa_config, dict) or "rpas" not in rpa_config:
         raise ValueError(
             f"Invalid RPA config format: expected dict with 'rpas' key, got {type(rpa_config).__name__}"
@@ -362,15 +375,25 @@ def yaml_value(value):
         return f'"{str(value)}"'
 
 
+def _strip_ruamel_types(value):
+    if isinstance(value, dict):
+        return {k: _strip_ruamel_types(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_strip_ruamel_types(v) for v in value]
+    return value
+
+
 def to_yaml_filter(value, indent=0):
     stream = StringIO()
-    _yaml_inline.dump(value, stream)
+    _yaml_for_filter.dump(_strip_ruamel_types(value), stream)
     result = stream.getvalue().rstrip("\n")
+    lines = result.split("\n")
+    if lines and lines[0] != lines[0].lstrip():
+        offset = len(lines[0]) - len(lines[0].lstrip())
+        lines = [line[offset:] if line[:offset].isspace() else line for line in lines]
     if indent > 0:
-        result = textwrap.dedent(result)
-        lines = result.split("\n")
         return "\n".join((" " * indent + line) for line in lines)
-    return result
+    return "\n".join(lines)
 
 
 def create_jinja_env(template_dir):
@@ -1610,6 +1633,12 @@ def main():
         help="Skip git repository health checks (branch, up-to-date) before generating resources",
     )
 
+    parser.add_argument(
+        "--include-parent",
+        action="store_true",
+        help="When used with --config-dir, also scan the parent directory for YAML config files (e.g., developer-portal.yaml)",
+    )
+
     args = parser.parse_args()
 
     if args.recreate_rpa:
@@ -1636,7 +1665,7 @@ def main():
     )
 
     # Collect all config files
-    config_files = collect_config_files(args.config_patterns, args.config_dir)
+    config_files = collect_config_files(args.config_patterns, args.config_dir, args.include_parent)
 
     print(f"Processing {len(config_files)} configuration file(s):")
     for cf in config_files:
