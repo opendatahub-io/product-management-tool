@@ -263,11 +263,15 @@ def test_normalize_rpa_config_tags_only_in_rpa():
     assert result[0]["tags"] == ["stage"]
 
 
+def test_normalize_rpa_config_empty_returns_empty():
+    assert onboard_product.normalize_rpa_config(None) == []
+    assert onboard_product.normalize_rpa_config([]) == []
+    assert onboard_product.normalize_rpa_config({}) == []
+
+
 def test_normalize_rpa_config_invalid_format_raises():
     with pytest.raises(ValueError):
         onboard_product.normalize_rpa_config("invalid")
-    with pytest.raises(ValueError):
-        onboard_product.normalize_rpa_config({})
     with pytest.raises(ValueError):
         onboard_product.normalize_rpa_config({"common": {}})
 
@@ -475,3 +479,64 @@ def test_config_env_overrides_toml(tmp_path, monkeypatch):
     monkeypatch.setenv("KRD_PATH", "/env/path")
     c = Config(config_file=toml_file)
     assert str(c["krd_path"]) == "/env/path"
+
+
+# ---------------------------------------------------------------------------
+# to_yaml_filter
+# ---------------------------------------------------------------------------
+
+
+def test_to_yaml_filter_exact_indent():
+    data = [{"cloud": "aws", "name": "test-aws"}]
+    result = onboard_product.to_yaml_filter(data, indent=12)
+    first_line = result.split("\n")[0]
+    stripped = first_line.lstrip(" ")
+    leading_spaces = len(first_line) - len(stripped)
+    assert leading_spaces == 12
+
+
+def test_to_yaml_filter_no_indent():
+    data = {"key": "value"}
+    result = onboard_product.to_yaml_filter(data, indent=0)
+    assert result.startswith("key:")
+
+
+def test_to_yaml_filter_strips_comments():
+    from ruamel.yaml import YAML as RuamelYAML
+
+    y = RuamelYAML()
+    commented = y.load("key: value  # this is a comment\n")
+    result = onboard_product.to_yaml_filter(commented, indent=0)
+    assert "#" not in result
+    assert "key: value" in result
+
+
+# ---------------------------------------------------------------------------
+# collect_config_files (include_parent)
+# ---------------------------------------------------------------------------
+
+
+def test_collect_config_files_include_parent(tmp_path):
+    parent = tmp_path / "product"
+    parent.mkdir()
+    branch = parent / "3.3"
+    branch.mkdir()
+    (branch / "config.yaml").write_text("branch: '3.3'\n")
+    (parent / "developer-portal.yaml").write_text("versions: []\n")
+    result = onboard_product.collect_config_files(None, branch, include_parent=True)
+    names = [f.name for f in result]
+    assert "config.yaml" in names
+    assert "developer-portal.yaml" in names
+
+
+def test_collect_config_files_no_parent_by_default(tmp_path):
+    parent = tmp_path / "product"
+    parent.mkdir()
+    branch = parent / "3.3"
+    branch.mkdir()
+    (branch / "config.yaml").write_text("branch: '3.3'\n")
+    (parent / "developer-portal.yaml").write_text("versions: []\n")
+    result = onboard_product.collect_config_files(None, branch)
+    names = [f.name for f in result]
+    assert "config.yaml" in names
+    assert "developer-portal.yaml" not in names
