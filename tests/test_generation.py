@@ -255,13 +255,15 @@ class TestMultiConfig:
         # Import collect_config_files from onboard-product.py
         config_files = onboard_product.collect_config_files(["tests/configs/test-*.yaml"], None)
 
-        # Should find test-full-container.yaml, test-disk-image.yaml, test-developer-portal.yaml, and test-marketplace.yaml
-        assert len(config_files) == 4
+        # Should find test-full-container.yaml, test-disk-image.yaml, test-developer-portal.yaml,
+        # test-marketplace.yaml, and test-stage-only-container.yaml
+        assert len(config_files) == 5
         assert all(isinstance(cf, Path) for cf in config_files)
         assert any("test-full-container.yaml" in str(cf) for cf in config_files)
         assert any("test-disk-image.yaml" in str(cf) for cf in config_files)
         assert any("test-developer-portal.yaml" in str(cf) for cf in config_files)
         assert any("test-marketplace.yaml" in str(cf) for cf in config_files)
+        assert any("test-stage-only-container.yaml" in str(cf) for cf in config_files)
 
     def test_collect_config_files_config_dir(self):
         """Test collecting config files using --config-dir."""

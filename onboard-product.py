@@ -474,6 +474,17 @@ def extract_repository_name(registry_url):
     return parts[1]
 
 
+def extract_stage_repo_name(stage_repository):
+    """Extract namespace/name from a stage repository URL, keeping last two path segments.
+
+    Stage repos may have an extra path segment vs prod (e.g. quay.io/org/namespace/name
+    vs registry.redhat.io/namespace/name); keep only the last two segments if so.
+    """
+    repo_path = extract_repository_name(stage_repository)
+    segments = repo_path.split("/")
+    return "/".join(segments[-2:]) if len(segments) > 2 else repo_path
+
+
 def resolve_repo_path(component, gitlab_repo_path, repo_overrides):
     """
     Resolve the local filesystem path for a component repository.
@@ -680,30 +691,32 @@ def render_pipelinerun_templates(
         branch, normalized_branch, versioned_app_name = get_branch_info(definition)
 
         # Construct CPE label: cpe:/a:redhat:{cpe_name}:{major.minor}::{rhel_target}
-        # cpe_name/rhel_target from definition-level cpe: field, or prod RPA annotations
-        # product_version always from prod RPA
+        # cpe_name/rhel_target from definition-level cpe: field, or RPA annotations
+        # product_version from any RPA (prod preferred, falls back to first available;
+        # all RPAs share the common product_version)
         cpe_value = None
         rpa_config = definition.get("release_plan_admission", [])
         rpas = normalize_rpa_config(rpa_config)
         prod_rpa = next((rpa for rpa in rpas if "prod" in rpa.get("name", "").lower()), None)
+        version_rpa = prod_rpa or (rpas[0] if rpas else None)
 
-        if prod_rpa:
+        if version_rpa:
             cpe_config = definition.get("cpe", {})
             if "name" in cpe_config and "rhel_target" in cpe_config:
                 cpe_name = cpe_config["name"]
                 rhel_target = cpe_config["rhel_target"]
             else:
-                annotations = prod_rpa.get("annotations", {})
+                annotations = version_rpa.get("annotations", {})
                 cpe_name = annotations.get("cpe_name")
                 rhel_target = annotations.get("rhel_target")
 
             if cpe_name and rhel_target:
-                product_version = prod_rpa.get("product_version", "")
+                product_version = version_rpa.get("product_version", "")
                 version_parts = product_version.split(".")
                 if len(version_parts) < 2:
                     raise ValueError(
                         f"CPE requires major.minor product_version but got '{product_version}' "
-                        f"in prod RPA '{prod_rpa.get('name', '')}'"
+                        f"in RPA '{version_rpa.get('name', '')}'"
                     )
                 major_minor = f"{version_parts[0]}.{version_parts[1]}"
                 cpe_value = f"cpe:/a:redhat:{cpe_name}:{major_minor}::{rhel_target}"
@@ -725,6 +738,15 @@ def render_pipelinerun_templates(
                 except ValueError as e:
                     print(
                         f"Warning: Could not extract repository name from prod_repository for {component_name}: {e}"
+                    )
+            elif "stage_repository" in component:
+                try:
+                    repo_name = extract_stage_repo_name(component["stage_repository"])
+                    labels.append(f"name={repo_name}")
+                    labels.append(f"com.redhat.component={repo_name}-container")
+                except ValueError as e:
+                    print(
+                        f"Warning: Could not extract repository name from stage_repository for {component_name}: {e}"
                     )
 
             if cpe_value:
@@ -767,14 +789,23 @@ def render_pipelinerun_templates(
 
                     # Build build_args array from config and/or use_build_args
                     build_args = list(pipelinerun_config.get("build_args", []))
-                    if use_build_args and "prod_repository" in component:
-                        try:
-                            repo_name = extract_repository_name(component["prod_repository"])
-                            build_args.append(f"NAME={repo_name}")
-                        except ValueError as e:
-                            print(
-                                f"Warning: Could not extract repository name from prod_repository for {component_name}: {e}"
-                            )
+                    if use_build_args:
+                        if "prod_repository" in component:
+                            try:
+                                repo_name = extract_repository_name(component["prod_repository"])
+                                build_args.append(f"NAME={repo_name}")
+                            except ValueError as e:
+                                print(
+                                    f"Warning: Could not extract repository name from prod_repository for {component_name}: {e}"
+                                )
+                        elif "stage_repository" in component:
+                            try:
+                                repo_name = extract_stage_repo_name(component["stage_repository"])
+                                build_args.append(f"NAME={repo_name}")
+                            except ValueError as e:
+                                print(
+                                    f"Warning: Could not extract repository name from stage_repository for {component_name}: {e}"
+                                )
                 else:
                     raise ValueError(
                         f"Unknown pipeline type '{pipeline}' for component '{component_name}'. Supported types: 'full-container', 'disk-image'"

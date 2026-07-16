@@ -102,6 +102,13 @@ def disk_image_pipelinerun(tmp_path_factory):
     return tmp, data
 
 
+@pytest.fixture(scope="module")
+def stage_only_pipelinerun(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("stage_only_pr")
+    data = generate_pipelinerun(CONFIGS_DIR / "test-stage-only-container.yaml", tmp)
+    return tmp, data
+
+
 # ---------------------------------------------------------------------------
 # KRD: Application resources
 # ---------------------------------------------------------------------------
@@ -542,6 +549,72 @@ class TestPipelinerunLabels:
                             )
         # CPE label may not appear in all generated files, that's ok
         # We just verify format when it appears
+
+    def test_cpe_label_generated_without_prod_rpa(self, stage_only_pipelinerun):
+        """CPE label must be generated even when only stage RPAs exist."""
+        pr_dir, _ = stage_only_pipelinerun
+        found_cpe = False
+        for path, doc in iter_yaml_files(pr_dir):
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            if "labels" in params:
+                label_list = params["labels"]
+                cpe_labels = [label for label in label_list if label.startswith("cpe=")]
+                if cpe_labels:
+                    found_cpe = True
+                    assert cpe_labels[0] == "cpe=cpe:/a:redhat:test_product:1.0::el9", (
+                        f"{path}: wrong CPE value: {cpe_labels[0]}"
+                    )
+        assert found_cpe, "No CPE label found in any stage-only pipelinerun"
+
+    def test_name_component_labels_from_prod_repository_without_prod_rpa(
+        self, stage_only_pipelinerun
+    ):
+        """name/com.redhat.component labels derived from prod_repository, even without prod RPA."""
+        pr_dir, _ = stage_only_pipelinerun
+        found = False
+        for path, doc in iter_yaml_files(pr_dir):
+            if "test-comp-with-prod-repo" not in path.name:
+                continue
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            assert "labels" in params, f"{path}: missing labels param"
+            label_list = params["labels"]
+            assert "name=test-ns/test-comp" in label_list, (
+                f"{path}: missing name label: {label_list}"
+            )
+            assert "com.redhat.component=test-ns/test-comp-container" in label_list, (
+                f"{path}: missing com.redhat.component label: {label_list}"
+            )
+            found = True
+        assert found, "No pipelinerun found for test-comp-with-prod-repo"
+
+    def test_name_component_labels_from_stage_repository_fallback(self, stage_only_pipelinerun):
+        """Without prod_repository, name/component derived from stage_repository."""
+        pr_dir, _ = stage_only_pipelinerun
+        found = False
+        for path, doc in iter_yaml_files(pr_dir):
+            if "test-comp-no-prod-repo" not in path.name:
+                continue
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            assert "labels" in params, f"{path}: missing labels param"
+            label_list = params["labels"]
+            # stage_repository quay.io/test-org/test-comp-2-stage → test-org/test-comp-2-stage
+            assert "name=test-org/test-comp-2-stage" in label_list, (
+                f"{path}: missing name label from stage_repository: {label_list}"
+            )
+            assert "com.redhat.component=test-org/test-comp-2-stage-container" in label_list, (
+                f"{path}: missing com.redhat.component label from stage_repository: {label_list}"
+            )
+            # CPE should also be there
+            cpe_labels = [label for label in label_list if label.startswith("cpe=")]
+            assert cpe_labels, f"{path}: CPE label missing"
+            found = True
+        assert found, "No pipelinerun found for test-comp-no-prod-repo"
 
 
 # ---------------------------------------------------------------------------
