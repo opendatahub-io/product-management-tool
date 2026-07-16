@@ -1,0 +1,62 @@
+# Test config with stage-only RPAs (no prod RPA)
+# Verifies that labels are generated even without a prod RPA:
+# - CPE label derived from cpe: block + any RPA's product_version
+# - name/com.redhat.component derived from prod_repository or stage_repository fallback
+definitions:
+  - application: test-stage-only
+    tenant: test-tenant
+    branch: main
+    cpe:
+      name: test_product
+      rhel_target: el9
+    components:
+      common:
+        pipelinerun:
+          pipeline: full-container
+      items:
+        - name: test-comp-with-prod-repo
+          context: .
+          dockerfile: Containerfile
+          url: https://gitlab.com/test-org/test-repo/test-component
+          stage_repository: quay.io/test-org/test-comp-stage
+          prod_repository: registry.redhat.io/test-ns/test-comp
+          pipelinerun:
+            - build_args_file: build.conf
+        - name: test-comp-no-prod-repo
+          context: .
+          dockerfile: Containerfile
+          url: https://gitlab.com/test-org/test-repo/test-component-2
+          stage_repository: quay.io/test-org/test-comp-2-stage
+          pipelinerun:
+            - build_args_file: build.conf
+
+    integration_test_scenarios:
+      - template: its-ecp
+        name: check-stage-ecp
+        optional: true
+        params:
+          - name: POLICY_CONFIGURATION
+            value: rhtap-releng-tenant/test-stage-policy
+          - name: SINGLE_COMPONENT
+            value: "true"
+
+    release_plan:
+      - name: test-stage
+        grace_period: 7
+        autorelease: true
+
+    release_plan_admission:
+      common:
+        single_component_mode: true
+        tags:
+          - "1.0.0"
+          - "1.0.0-{{ timestamp }}"
+        product_name: Test Product
+        product_version: "1.0.0"
+        product_id: [99999]
+      rpas:
+        - name: test-stage
+          policy: test-stage-policy
+          service_account: test-sa
+          pipeline_path: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
+          intention: staging
