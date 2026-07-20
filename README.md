@@ -437,6 +437,21 @@ components:
   - When `true`: Generates `annotations.release.appstudio.openshift.io/auto-release` with component list
   - When `false`: Generates `labels.release.appstudio.openshift.io/auto-release` with boolean value
 - `author` - Author label for release plan (e.g., "rhel-ai-team")
+- `final_pipeline` - Optional pipeline run after release completes (git resolver); omitted when not set
+  ```yaml
+  release_plan:
+    - name: my-product-stage
+      grace_period: 30
+      autorelease: true
+      final_pipeline:
+        url: https://github.com/aipcc-cicd/konflux-data
+        revision: main
+        path_in_repo: pipelines/copy-clair-scan-results.yaml
+        service_account_name: finalpipeline-sa
+        params:                        # OPTIONAL - additional pipeline params
+          - name: some-param
+            value: some-value
+  ```
 
 **ReleasePlanAdmission-level:**
 - `single_component_mode` - Individual vs bundled releases (default: false)
