@@ -21,3 +21,23 @@ spec:
   application: [[ application_name ]]
   releaseGracePeriodDays: [[ release_plan_grace_period ]]
   target: rhtap-releng-tenant
+{%- if final_pipeline %}
+  finalPipeline:
+    pipelineRef:
+      resolver: git
+      params:
+        - name: url
+          value: "[[ final_pipeline.url ]]"
+        - name: revision
+          value: "[[ final_pipeline.revision ]]"
+        - name: pathInRepo
+          value: "[[ final_pipeline.path_in_repo ]]"
+    serviceAccountName: [[ final_pipeline.service_account_name ]]
+{%- if final_pipeline.params %}
+    params:
+{%- for param in final_pipeline.params %}
+      - name: [[ param.name ]]
+        value: "[[ param.value ]]"
+{%- endfor %}
+{%- endif %}
+{%- endif %}

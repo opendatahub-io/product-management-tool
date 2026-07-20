@@ -581,7 +581,7 @@ class TestRPAValidation:
     def teardown_method(self):
         shutil.rmtree(self.temp_dir)
 
-    def _make_data(self, components, rpas, branch="main", common=None):
+    def _make_data(self, components, rpas, branch="main", common=None, release_plan_extra=None):
         comp_items = []
         for c in components:
             item = {
@@ -597,6 +597,10 @@ class TestRPAValidation:
         if common:
             rpa_config["common"] = common
 
+        release_plan_entry = {"name": rpas[0]["name"], "grace_period": 7, "autorelease": False}
+        if release_plan_extra:
+            release_plan_entry.update(release_plan_extra)
+
         return {
             "definitions": [
                 {
@@ -604,9 +608,7 @@ class TestRPAValidation:
                     "tenant": "test-tenant",
                     "branch": branch,
                     "components": {"items": comp_items},
-                    "release_plan": [
-                        {"name": rpas[0]["name"], "grace_period": 7, "autorelease": False}
-                    ],
+                    "release_plan": [release_plan_entry],
                     "release_plan_admission": rpa_config,
                 }
             ]
@@ -633,6 +635,23 @@ class TestRPAValidation:
         rpa_file = rpa_dir / f"{name}.yaml"
         assert rpa_file.exists(), f"RPA file not found: {rpa_file}"
         with open(rpa_file) as f:
+            return yaml.load(f)
+
+    def _read_release_plan(self, name, branch="main"):
+        rp_dir = (
+            self.temp_krd
+            / "tenants-config"
+            / "cluster"
+            / self.config["cluster"]
+            / "tenants"
+            / "test-tenant"
+            / "test-app"
+            / branch
+            / "releaseplans"
+        )
+        rp_file = rp_dir / f"{name}.yaml"
+        assert rp_file.exists(), f"ReleasePlan file not found: {rp_file}"
+        with open(rp_file) as f:
             return yaml.load(f)
 
     # --- release_type auto-detection ---
@@ -1308,6 +1327,122 @@ class TestRPAValidation:
             ],
         )
         with pytest.raises(ValueError, match="Invalid release_type 'cdnn'"):
+            self._render(data)
+
+    # --- finalPipeline ---
+
+    def test_release_plan_without_final_pipeline_omits_block(self):
+        """finalPipeline is omitted from the ReleasePlan when not configured."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        self._render(data)
+        rp = self._read_release_plan("test-stage")
+        assert "finalPipeline" not in rp["spec"]
+
+    def test_release_plan_with_final_pipeline_renders_block(self):
+        """finalPipeline config is threaded through to the rendered ReleasePlan."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+            release_plan_extra={
+                "final_pipeline": {
+                    "url": "https://github.com/aipcc-cicd/konflux-data",
+                    "revision": "main",
+                    "path_in_repo": "pipelines/copy-clair-scan-results.yaml",
+                    "service_account_name": "finalpipeline-sa",
+                }
+            },
+        )
+        self._render(data)
+        rp = self._read_release_plan("test-stage")
+        final_pipeline = rp["spec"]["finalPipeline"]
+        assert final_pipeline["serviceAccountName"] == "finalpipeline-sa"
+        params = {p["name"]: p["value"] for p in final_pipeline["pipelineRef"]["params"]}
+        assert params == {
+            "url": "https://github.com/aipcc-cicd/konflux-data",
+            "revision": "main",
+            "pathInRepo": "pipelines/copy-clair-scan-results.yaml",
+        }
+        assert "params" not in final_pipeline
+
+    def test_release_plan_with_final_pipeline_params_renders_extra_params(self):
+        """Optional finalPipeline.params entries are rendered when provided."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+            release_plan_extra={
+                "final_pipeline": {
+                    "url": "https://github.com/aipcc-cicd/konflux-data",
+                    "revision": "main",
+                    "path_in_repo": "pipelines/copy-clair-scan-results.yaml",
+                    "service_account_name": "finalpipeline-sa",
+                    "params": [{"name": "foo", "value": "bar"}],
+                }
+            },
+        )
+        self._render(data)
+        rp = self._read_release_plan("test-stage")
+        final_pipeline = rp["spec"]["finalPipeline"]
+        assert final_pipeline["params"] == [{"name": "foo", "value": "bar"}]
+
+    def test_release_plan_with_partial_final_pipeline_raises(self):
+        """A final_pipeline dict missing required sub-fields fails loudly instead of
+        silently rendering empty string values into the ReleasePlan."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+            release_plan_extra={
+                "final_pipeline": {
+                    "url": "https://github.com/aipcc-cicd/konflux-data",
+                    "revision": "main",
+                }
+            },
+        )
+        with pytest.raises(
+            ValueError, match=r"missing required field\(s\).*path_in_repo.*service_account_name"
+        ):
             self._render(data)
 
 

@@ -1206,6 +1206,25 @@ def render_krd_templates(
             # Collect component names for autorelease annotation
             component_names = [get_component_name(comp["name"], branch) for comp in components]
 
+            # Validate final_pipeline config: a partial dict would silently render
+            # Kubernetes resources with empty string values instead of failing loudly.
+            final_pipeline = rp.get("final_pipeline")
+            if final_pipeline is not None:
+                required_final_pipeline_fields = [
+                    "url",
+                    "revision",
+                    "path_in_repo",
+                    "service_account_name",
+                ]
+                missing_final_pipeline_fields = [
+                    field for field in required_final_pipeline_fields if field not in final_pipeline
+                ]
+                if missing_final_pipeline_fields:
+                    raise ValueError(
+                        f"Release plan '{base_rp_name}' has a 'final_pipeline' config missing required "
+                        f"field(s): {sorted(missing_final_pipeline_fields)}"
+                    )
+
             rp_content = rp_template.render(
                 application_name=versioned_app_name,
                 release_plan_name=rp_name,
@@ -1216,6 +1235,7 @@ def render_krd_templates(
                 autorelease_annotation=rp.get("autorelease_annotation", False),
                 author=rp.get("author"),
                 components=component_names,
+                final_pipeline=final_pipeline,
             )
             rp_filename = f"{rp_name}.yaml"
             write_with_newline(os.path.join(releaseplans_dir, rp_filename), rp_content)
