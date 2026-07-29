@@ -67,7 +67,6 @@ uv run python onboard-product.py --config "/path/to/configs/app1/*.yaml" --confi
 
 A pre-built container image is published automatically from the main branch:
 
-- **GitLab Registry**: `registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest`
 - **Quay.io**: `quay.io/aipcc-cicd/aipcc-product-management:latest`
 
 ```bash
@@ -75,7 +74,7 @@ A pre-built container image is published automatically from the main branch:
 git clone https://gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management-configs.git
 
 # Pull the pre-built image
-podman pull registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest
+podman pull quay.io/aipcc-cicd/aipcc-product-management:latest
 
 # Generate both KRD and pipelinerun resources
 podman run --rm --userns=keep-id:uid=1001,gid=1001 \
@@ -84,7 +83,7 @@ podman run --rm --userns=keep-id:uid=1001,gid=1001 \
   -v /path/to/gitlab-repos:/repos \
   -e KRD_PATH=/krd \
   -e GITLAB_REPO_PATH=/repos \
-  registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest \
+  quay.io/aipcc-cicd/aipcc-product-management:latest \
   --config /configs/llama-stack/llama-stack-rhoai-2-23.yaml
 
 # Generate only pipelinerun resources
@@ -92,7 +91,7 @@ podman run --rm --userns=keep-id:uid=1001,gid=1001 \
   -v /path/to/aipcc-product-management-configs:/configs:ro \
   -v /path/to/gitlab-repos:/repos \
   -e GITLAB_REPO_PATH=/repos \
-  registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest \
+  quay.io/aipcc-cicd/aipcc-product-management:latest \
   --config /configs/llama-stack/llama-stack-rhoai-2-23.yaml --mode pipelinerun
 
 # Build your own image instead
