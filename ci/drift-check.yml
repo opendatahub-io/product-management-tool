@@ -7,7 +7,7 @@ spec:
 
 drift-check:
   stage: $[[ inputs.JOB_STAGE ]]
-  image: registry.gitlab.com/redhat/rhel-ai/ci-cd/aipcc-product-management:latest
+  image: quay.io/aipcc-cicd/aipcc-product-management:latest
   allow_failure: true
   tags:
     - aipcc-k8s-cicd

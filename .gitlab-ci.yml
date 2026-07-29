@@ -66,15 +66,18 @@ build:
     - ${runner}
   before_script:
     - dnf install podman make git -y
-    - podman login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin <<< "$CI_REGISTRY_PASSWORD"
-    - if [[ -n "$CI_MERGE_REQUEST_ID" ]]; then IMAGE_TAG=mr-$CI_MERGE_REQUEST_IID; fi
+    - podman login $QUAY_REGISTRY -u $QUAY_REGISTRY_USER --password-stdin <<< "$QUAY_REGISTRY_PASSWORD"
+    - |
+      if [[ -n "$CI_MERGE_REQUEST_ID" ]]; then
+        export IMAGE_TAG=mr-$CI_MERGE_REQUEST_IID
+        export LABELS="--label quay.expires-after=7d"
+      fi
   parallel:
     matrix:
       - runner: aipcc
       - runner: aipcc-small-aarch64
   variables:
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
-    IMAGE_REPO: $CI_REGISTRY_IMAGE
 
   script:
     - make build
@@ -87,11 +90,10 @@ manifest:
     - aipcc
   before_script:
     - dnf install podman make git -y
-    - podman login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin <<< "$CI_REGISTRY_PASSWORD"
-    - if [[ -n "$CI_MERGE_REQUEST_ID" ]]; then IMAGE_TAG=mr-$CI_MERGE_REQUEST_IID; fi
+    - podman login $QUAY_REGISTRY -u $QUAY_REGISTRY_USER --password-stdin <<< "$QUAY_REGISTRY_PASSWORD"
+    - if [[ -n "$CI_MERGE_REQUEST_ID" ]]; then export IMAGE_TAG=mr-$CI_MERGE_REQUEST_IID; fi
   variables:
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
-    IMAGE_REPO: $CI_REGISTRY_IMAGE
   script:
     - make manifest-create
     - make manifest-build
@@ -112,7 +114,6 @@ release:
     IMAGE_TAG: $CI_COMMIT_SHORT_SHA
   before_script:
     - dnf install make skopeo -y
-    - skopeo login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin <<< "$CI_REGISTRY_PASSWORD"
     - skopeo login $QUAY_REGISTRY -u $QUAY_REGISTRY_USER --password-stdin <<< "$QUAY_REGISTRY_PASSWORD"
   script:
     - make release
