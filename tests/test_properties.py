@@ -478,6 +478,77 @@ class TestPipelinerunCELExpressions:
             assert "pathChanged()" in cel, f"{path}: pathChanged() not in CEL"
             assert '"ci".pathChanged()' in cel, f"{path}: 'ci' pathChanged not in CEL"
 
+    def test_cel_path_changed_is_not_context_prefixed(self, full_container_pipelinerun):
+        # cel_path_changed entries are repo-root-relative and must be emitted
+        # verbatim, even when the component has a non-"." context. Only
+        # context_cel_path_changed gets the prefix.
+        pr_dir, _ = full_container_pipelinerun
+        pr_files = [
+            (p, d)
+            for p, d in iter_yaml_files(pr_dir)
+            if "test-component-1-on-pull-request" in p.name
+        ]
+        assert pr_files, "test-component-1-on-pull-request not found"
+        for path, doc in pr_files:
+            cel = self._get_cel(doc)
+            for entry in ("ci", "context/app/***", "context/test-variant/repo/*"):
+                assert f'"{entry}".pathChanged()' in cel, (
+                    f"{path}: root-relative '{entry}' should be verbatim in CEL"
+                )
+                assert f'"test-context/{entry}".pathChanged()' not in cel, (
+                    f"{path}: root-relative '{entry}' must NOT be context-prefixed"
+                )
+
+    def test_context_cel_path_changed_is_prefixed(self, full_container_pipelinerun):
+        # context_cel_path_changed entries are relative to the component context
+        # (./test-context) and must be prefixed, with {variant} still expanded.
+        pr_dir, _ = full_container_pipelinerun
+        pr_files = [
+            (p, d)
+            for p, d in iter_yaml_files(pr_dir)
+            if "test-component-1-on-pull-request" in p.name
+        ]
+        assert pr_files, "test-component-1-on-pull-request not found"
+        for path, doc in pr_files:
+            cel = self._get_cel(doc)
+            assert '"test-context/scripts/***".pathChanged()' in cel, (
+                f"{path}: context_cel_path_changed entry not context-prefixed"
+            )
+            assert '"test-context/test-variant/overlay/***".pathChanged()' in cel, (
+                f"{path}: context_cel_path_changed {{variant}} entry not prefixed/expanded"
+            )
+            assert "{variant}" not in cel, f"{path}: literal {{variant}} left in CEL"
+
+    def test_disk_image_context_prefix_applied_everywhere(self, disk_image_pipelinerun):
+        # test-disk-image.yaml uses a non-"." context (./test-disk-context), so
+        # every repo-root-relative param AND every CEL pathChanged() path that
+        # points at the component's own tree must carry the context prefix.
+        # Guards against prefixing some paths (dockerfile/path-context) but not
+        # others (config-toml); a regenerated golden fixture cannot catch this.
+        pr_dir, _ = disk_image_pipelinerun
+        prefix = "test-disk-context/"
+        # Params that resolve against the git checkout root (task-resolved).
+        prefixed_params = ("path-context", "config-toml", "bib-file")
+        files = list(iter_yaml_files(pr_dir))
+        assert files, "No disk-image pipelinerun files found"
+        for path, doc in files:
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            for name in prefixed_params:
+                assert name in params, f"{path}: expected param '{name}'"
+                assert params[name].startswith(prefix), (
+                    f"{path}: param '{name}' not context-prefixed: {params[name]!r}"
+                )
+            # config_toml and dockerfile also appear in the CEL expression.
+            cel = self._get_cel(doc)
+            assert f'"{prefix}config/config-test-iso.toml".pathChanged()' in cel, (
+                f"{path}: config_toml pathChanged not context-prefixed in CEL"
+            )
+            assert f'"{prefix}TestDiskContainerfile".pathChanged()' in cel, (
+                f"{path}: dockerfile pathChanged not context-prefixed in CEL"
+            )
+
     def test_variant_placeholder_replaced(self, full_container_pipelinerun):
         pr_dir, _ = full_container_pipelinerun
         for path, doc in iter_yaml_files(pr_dir):

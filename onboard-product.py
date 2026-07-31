@@ -59,6 +59,18 @@ def canonicalize(value):
     return value.replace(".", "-").lower()
 
 
+def prefix_repo_path(prefix, path):
+    """Prepend a repo-subdirectory prefix to a repo-root-relative path.
+
+    Used when a component lives in a monorepo subdirectory (component `context`
+    other than "."). When prefix is empty (context == "." or unset), the path is
+    returned unchanged so output for existing configs is byte-identical.
+    """
+    if not prefix or not path:
+        return path
+    return f"{prefix}/{path.removeprefix('./')}"
+
+
 def create_kustomization(directory, files, tenant):
     """
     Create or update a kustomization.yaml file in the specified directory.
@@ -768,21 +780,34 @@ def render_pipelinerun_templates(
                 # Extract common parameters
                 build_platforms = pipelinerun_config.get("build_platforms", [])
                 timeouts = pipelinerun_config.get("timeouts", {})
+                # cel_path_changed: paths are used verbatim, relative to the repo root.
+                # context_cel_path_changed: paths are relative to the component's
+                # `context` and get that prefix applied (monorepo layouts).
                 cel_path_changed = pipelinerun_config.get("cel_path_changed", [])
+                context_cel_path_changed = pipelinerun_config.get("context_cel_path_changed", [])
                 cel_push_tag_prefixes = pipelinerun_config.get("cel_push_tag_prefixes", [])
                 build_nudge_files = pipelinerun_config.get("build_nudge_files", "")
                 image_expires_after = pipelinerun_config.get("image_expires_after", "5d")
                 path_context = pipelinerun_config.get("path_context", "./context/")
 
+                raw_context = component.get("context", component.get("contenxt", "."))
+                ctx_prefix = (
+                    ""
+                    if raw_context.strip("/").removeprefix("./") in ("", ".")
+                    else raw_context.strip("/").removeprefix("./")
+                )
+                path_context = prefix_repo_path(ctx_prefix, path_context)
+
                 # Select template based on pipeline type
                 if pipeline == "disk-image":
                     template_name = "disk-image.yaml.j2"
                     image_type = pipelinerun_config["image_type"]
-                    config_toml = pipelinerun_config["config_toml"]
+                    config_toml = prefix_repo_path(ctx_prefix, pipelinerun_config["config_toml"])
                 elif pipeline == "full-container":
                     template_name = "full-container.yaml.j2"
                     # Extract full-container specific parameters
                     build_args_file = pipelinerun_config["build_args_file"]
+                    build_args_file = prefix_repo_path(ctx_prefix, build_args_file)
                     variant = pipelinerun_config.get("variant", "")
                     skip_checks = pipelinerun_config.get("skip-checks", False)
                     use_build_args = pipelinerun_config.get("use_build_args", False)
@@ -817,10 +842,15 @@ def render_pipelinerun_templates(
                 variant_value = (
                     pipelinerun_config.get("variant", "") if pipeline == "full-container" else ""
                 )
-                if cel_path_changed:
-                    cel_path_changed = [
-                        path.replace("{variant}", variant_value) for path in cel_path_changed
-                    ]
+                cel_path_changed = [
+                    path.replace("{variant}", variant_value) for path in cel_path_changed
+                ]
+                # Component-context-relative entries get the context prefix, then are
+                # appended to the repo-root-relative ones.
+                cel_path_changed += [
+                    prefix_repo_path(ctx_prefix, path.replace("{variant}", variant_value))
+                    for path in context_cel_path_changed
+                ]
                 if cel_push_tag_prefixes:
                     cel_push_tag_prefixes = [
                         prefix.replace("{variant}", variant_value)
@@ -845,7 +875,9 @@ def render_pipelinerun_templates(
                         "component_name": component_name,
                         "base_component_name": base_component_name,
                         "component_url": component_url,
-                        "component_dockerfile": component.get("dockerfile", "Containerfile"),
+                        "component_dockerfile": prefix_repo_path(
+                            ctx_prefix, component.get("dockerfile", "Containerfile")
+                        ),
                         "tenant_name": tenant,
                         "pipelinerun_type": pr_type,
                         "branch": branch,

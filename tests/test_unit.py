@@ -42,6 +42,31 @@ def test_canonicalize(value, expected):
 
 
 # ---------------------------------------------------------------------------
+# prefix_repo_path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "prefix, path, expected",
+    [
+        # empty prefix (context "." / unset) leaves paths untouched
+        ("", "Containerfile.cpu-app", "Containerfile.cpu-app"),
+        ("", "./context/", "./context/"),
+        ("", "", ""),
+        # nested monorepo prefix is prepended, leading ./ stripped from path
+        ("images/base", "Containerfile.cpu-app", "images/base/Containerfile.cpu-app"),
+        ("images/base", "./context/", "images/base/context/"),
+        ("images/base", "build-args/cpu-app.conf", "images/base/build-args/cpu-app.conf"),
+        ("images/base", "context/app/***", "images/base/context/app/***"),
+        # empty path is returned unchanged even with a prefix
+        ("images/base", "", ""),
+    ],
+)
+def test_prefix_repo_path(prefix, path, expected):
+    assert onboard_product.prefix_repo_path(prefix, path) == expected
+
+
+# ---------------------------------------------------------------------------
 # get_application_name / get_component_name
 # ---------------------------------------------------------------------------
 

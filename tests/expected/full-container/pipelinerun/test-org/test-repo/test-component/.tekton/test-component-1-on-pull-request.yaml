@@ -11,14 +11,16 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "pull_request" && target_branch == "test-branch-1.0" && (
           ".tekton/test-component-1-on-pull-request.yaml".pathChanged() ||
-          "test-args/build.conf".pathChanged() ||
-          "TestContainerfile-1".pathChanged() ||
+          "test-context/test-args/build.conf".pathChanged() ||
+          "test-context/TestContainerfile-1".pathChanged() ||
           "ci".pathChanged() ||
           "context/app/***".pathChanged() ||
           "context/common/***".pathChanged() ||
           "context/test-variant/app/***".pathChanged() ||
           "context/test-variant/common/***".pathChanged() ||
-          "context/test-variant/repo/*".pathChanged()
+          "context/test-variant/repo/*".pathChanged() ||
+          "test-context/scripts/***".pathChanged() ||
+          "test-context/test-variant/overlay/***".pathChanged()
       )
   labels:
     appstudio.openshift.io/application: test-full-container-test-branch-1-0
@@ -41,11 +43,11 @@ spec:
   - name: image-expires-after
     value: 5d
   - name: dockerfile
-    value: TestContainerfile-1
+    value: test-context/TestContainerfile-1
   - name: path-context
-    value: ./test-build-context/
+    value: test-context/test-build-context/
   - name: build-args-file
-    value: test-args/build.conf
+    value: test-context/test-args/build.conf
   - name: build-args
     value:
     - NAME=test-org-prod/test-component-1-prod

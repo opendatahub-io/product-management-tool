@@ -10,8 +10,8 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "push" && target_branch == "test-disk-branch" && (
           ".tekton/test-disk-component-on-push.yaml".pathChanged() ||
-          "TestDiskContainerfile".pathChanged() ||
-          "config/config-test-iso.toml".pathChanged()
+          "test-disk-context/TestDiskContainerfile".pathChanged() ||
+          "test-disk-context/config/config-test-iso.toml".pathChanged()
       )
   labels:
     appstudio.openshift.io/application: test-disk-image-test-disk-branch
@@ -32,13 +32,13 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/test-disk-tenant/test-disk-image-test-disk-branch/test-disk-component-test-disk-branch:{{revision}}
   - name: path-context
-    value: ./test-disk-build/
+    value: test-disk-context/test-disk-build/
   - name: image-type
     value: iso
   - name: config-toml
-    value: config/config-test-iso.toml
+    value: test-disk-context/config/config-test-iso.toml
   - name: bib-file
-    value: TestDiskContainerfile
+    value: test-disk-context/TestDiskContainerfile
   - name: build-platforms
     value:
     - linux-root/amd64

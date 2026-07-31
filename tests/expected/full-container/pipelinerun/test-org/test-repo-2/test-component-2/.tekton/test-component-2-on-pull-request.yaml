@@ -11,8 +11,8 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "pull_request" && target_branch == "test-branch-1.0" && (
           ".tekton/test-component-2-on-pull-request.yaml".pathChanged() ||
-          "test-args/build-2.conf".pathChanged() ||
-          "TestContainerfile-2".pathChanged()
+          "test-context-2/test-args/build-2.conf".pathChanged() ||
+          "test-context-2/TestContainerfile-2".pathChanged()
       )
   labels:
     appstudio.openshift.io/application: test-full-container-test-branch-1-0
@@ -35,11 +35,11 @@ spec:
   - name: image-expires-after
     value: 5d
   - name: dockerfile
-    value: TestContainerfile-2
+    value: test-context-2/TestContainerfile-2
   - name: path-context
-    value: ./test-build-context-2/
+    value: test-context-2/test-build-context-2/
   - name: build-args-file
-    value: test-args/build-2.conf
+    value: test-context-2/test-args/build-2.conf
   - name: build-platforms
     value:
     - linux/x86_64
