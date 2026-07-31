@@ -31,11 +31,11 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/test-tenant/test-full-container-test-branch-1-0/test-component-1-test-branch-1-0:{{revision}}
   - name: dockerfile
-    value: TestContainerfile-1
+    value: test-context/TestContainerfile-1
   - name: path-context
-    value: ./test-build-context/
+    value: test-context/test-build-context/
   - name: build-args-file
-    value: test-args/build.conf
+    value: test-context/test-args/build.conf
   - name: build-args
     value:
     - NAME=test-org-prod/test-component-1-prod

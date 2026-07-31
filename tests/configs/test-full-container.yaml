@@ -47,6 +47,9 @@ definitions:
                 - "context/{variant}/app/***"
                 - "context/{variant}/common/***"
                 - "context/{variant}/repo/*"
+              context_cel_path_changed:
+                - "scripts/***"
+                - "{variant}/overlay/***"
               cel_push_tag_prefixes:
                 - "v"
                 - "{variant}-v"
