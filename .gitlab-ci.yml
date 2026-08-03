@@ -36,7 +36,7 @@ cache:
     - .venv
 
 .python_base:
-  image: registry.access.redhat.com/ubi9/python-311:9.7
+  image: registry.access.redhat.com/ubi9/python-311:9.8-1779945715
   tags:
     - aipcc-k8s-cicd
   before_script:

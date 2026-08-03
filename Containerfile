@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/python-312:9.6
+FROM registry.access.redhat.com/ubi9/python-312:9.8-1785759856
 
 # Switch to root to install uv
 USER 0
