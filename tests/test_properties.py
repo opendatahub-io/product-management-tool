@@ -978,6 +978,46 @@ class TestPipelinerunLabels:
             found = True
         assert found, "No pipelinerun found for test-comp-no-prod-repo"
 
+    def test_config_labels_appear_in_output(self, full_container_pipelinerun):
+        """Config-defined labels (common + per-component) appear in generated pipelineruns."""
+        pr_dir, _ = full_container_pipelinerun
+        for path, doc in iter_yaml_files(pr_dir):
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            if "labels" not in params:
+                continue
+            label_list = params["labels"]
+            # Common label from common.pipelinerun.labels
+            assert "maintainer=Test Vendor" in label_list, (
+                f"{path}: missing common label 'maintainer=Test Vendor': {label_list}"
+            )
+
+    def test_per_component_labels_override_common(self, full_container_pipelinerun):
+        """Per-component labels appear and merge with common labels."""
+        pr_dir, _ = full_container_pipelinerun
+        found = False
+        for path, doc in iter_yaml_files(pr_dir):
+            if "test-component-2" not in path.name:
+                continue
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            assert "labels" in params, f"{path}: missing labels param"
+            label_list = params["labels"]
+            assert "io.openshift.tags=test component tags" in label_list, (
+                f"{path}: missing per-component label: {label_list}"
+            )
+            assert "summary=Test Component 2 Summary" in label_list, (
+                f"{path}: missing per-component summary label: {label_list}"
+            )
+            # Common label should still be present
+            assert "maintainer=Test Vendor" in label_list, (
+                f"{path}: common label missing after merge: {label_list}"
+            )
+            found = True
+        assert found, "No pipelinerun found for test-component-2"
+
 
 # ---------------------------------------------------------------------------
 # Pipelinerun: File pairs

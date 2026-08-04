@@ -9,6 +9,8 @@ definitions:
       common:
         pipelinerun:
           pipeline: full-container
+          labels:
+            - maintainer=Test Vendor
       items:
         - name: test-component-1
           disabled: true
@@ -73,6 +75,9 @@ definitions:
                 - linux/x86_64
                 - linux/arm64
               skip-checks: false
+              labels:
+                - io.openshift.tags=test component tags
+                - summary=Test Component 2 Summary
               params:
                 - name: additional-build-secret
                   value: test-registry-secret-2
