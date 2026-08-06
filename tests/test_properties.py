@@ -433,6 +433,297 @@ class TestPipelinerunTektonStructure:
 
 
 # ---------------------------------------------------------------------------
+# Pipelinerun: Disabled component and placeholder tests
+# ---------------------------------------------------------------------------
+
+
+class TestDisabledComponent:
+    """Invariant tests for disabled components and placeholder generation."""
+
+    def test_cel_expression_disabled_full_container(self, tmp_path):
+        config_data = {
+            "definitions": [
+                {
+                    "application": "app",
+                    "tenant": "tenant",
+                    "branch": "main",
+                    "components": {
+                        "items": [
+                            {
+                                "name": "comp-tags",
+                                "url": "https://gitlab.com/org/repo/comp-tags",
+                                "disabled": True,
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "args.conf",
+                                        "cel_push_tag_prefixes": ["v"],
+                                    }
+                                ],
+                            },
+                            {
+                                "name": "comp-plain",
+                                "url": "https://gitlab.com/org/repo/comp-plain",
+                                "disabled": True,
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "args.conf",
+                                    }
+                                ],
+                            },
+                        ]
+                    },
+                }
+            ]
+        }
+        onboard_product.render_pipelinerun_templates(
+            config_data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+
+        files = list(iter_yaml_files(tmp_path))
+        assert len(files) == 4, f"Expected 4 pipelinerun files, got {len(files)}"
+        for pr_path, doc in files:
+            cel = doc["metadata"]["annotations"]["pipelinesascode.tekton.dev/on-cel-expression"]
+            assert cel.rstrip().endswith(") && false"), (
+                f"{pr_path}: CEL expression does not end with ') && false': {cel!r}"
+            )
+
+    def test_cel_expression_non_disabled_no_false(self, full_container_pipelinerun):
+        pr_dir, _ = full_container_pipelinerun
+        non_disabled_files = [
+            (p, d) for p, d in iter_yaml_files(pr_dir) if "test-component-2" in p.name
+        ]
+        assert non_disabled_files, "No non-disabled component files found"
+        for path, doc in non_disabled_files:
+            cel = (
+                doc.get("metadata", {})
+                .get("annotations", {})
+                .get("pipelinesascode.tekton.dev/on-cel-expression", "")
+            )
+            assert "&& false" not in cel, f"{path}: found '&& false' in non-disabled CEL expression"
+
+    def test_cel_expression_disabled_disk_image(self, tmp_path):
+        config_data = {
+            "definitions": [
+                {
+                    "application": "app",
+                    "tenant": "tenant",
+                    "branch": "main",
+                    "components": {
+                        "items": [
+                            {
+                                "name": "disk-comp",
+                                "url": "https://gitlab.com/org/repo/disk-comp",
+                                "disabled": True,
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "disk-image",
+                                        "image_type": "qcow2",
+                                        "config_toml": "config.toml",
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+        onboard_product.render_pipelinerun_templates(
+            config_data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+        files = list(iter_yaml_files(tmp_path))
+        assert files, "No disk-image pipelinerun files generated"
+        for path, doc in files:
+            cel = doc["metadata"]["annotations"]["pipelinesascode.tekton.dev/on-cel-expression"]
+            assert cel.rstrip().endswith(") && false"), (
+                f"{path}: disk-image CEL expression does not end with ') && false': {cel!r}"
+            )
+
+    def test_placeholder_creation_context_prefixed(self, tmp_path):
+        config_data = {
+            "definitions": [
+                {
+                    "application": "app",
+                    "tenant": "tenant",
+                    "branch": "main",
+                    "components": {
+                        "items": [
+                            {
+                                "name": "comp-1",
+                                "context": "./sub/dir",
+                                "dockerfile": "CustomDockerfile",
+                                "url": "https://gitlab.com/org/repo/comp-1",
+                                "disabled": True,
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "build-args/custom.conf",
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+        onboard_product.render_pipelinerun_templates(
+            config_data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+
+        containerfile_path = tmp_path / "org" / "repo/comp-1" / "sub" / "dir" / "CustomDockerfile"
+        argfile_path = (
+            tmp_path / "org" / "repo/comp-1" / "sub" / "dir" / "build-args" / "custom.conf"
+        )
+
+        assert containerfile_path.exists(), f"Containerfile missing at {containerfile_path}"
+        assert argfile_path.exists(), f"argfile missing at {argfile_path}"
+
+        containerfile_content = containerfile_path.read_text()
+        argfile_content = argfile_path.read_text()
+
+        assert "PLACEHOLDER — generated by PMT" in containerfile_content
+        assert "FROM scratch" in containerfile_content
+        assert "ARG PLACEHOLDER" in containerfile_content
+
+        assert "PLACEHOLDER — generated by PMT" in argfile_content
+        assert "PLACEHOLDER=placeholder" in argfile_content
+
+    def test_placeholder_no_overwrite(self, tmp_path):
+        repo_dir = tmp_path / "org" / "repo/comp-1" / "sub" / "dir"
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        containerfile_path = repo_dir / "Containerfile"
+        argfile_path = repo_dir / "args.conf"
+
+        sentinel_cfile = "FROM alpine\n# Existing"
+        sentinel_argfile = "MY_ARG=value"
+        containerfile_path.write_text(sentinel_cfile)
+        argfile_path.write_text(sentinel_argfile)
+
+        config_data = {
+            "definitions": [
+                {
+                    "application": "app",
+                    "tenant": "tenant",
+                    "branch": "main",
+                    "components": {
+                        "items": [
+                            {
+                                "name": "comp-1",
+                                "context": "./sub/dir",
+                                "url": "https://gitlab.com/org/repo/comp-1",
+                                "disabled": True,
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "args.conf",
+                                    }
+                                ],
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+        onboard_product.render_pipelinerun_templates(
+            config_data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+
+        assert containerfile_path.read_text() == sentinel_cfile
+        assert argfile_path.read_text() == sentinel_argfile
+
+    def test_placeholder_not_created_when_not_disabled_or_disk_image(self, tmp_path):
+        config_data = {
+            "definitions": [
+                {
+                    "application": "app",
+                    "tenant": "tenant",
+                    "branch": "main",
+                    "components": {
+                        "items": [
+                            {
+                                "name": "active-comp",
+                                "context": "./sub1",
+                                "url": "https://gitlab.com/org/repo/active",
+                                "disabled": False,
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "full-container",
+                                        "build_args_file": "args1.conf",
+                                    }
+                                ],
+                            },
+                            {
+                                "name": "disabled-disk",
+                                "context": "./sub2",
+                                "url": "https://gitlab.com/org/repo/disk",
+                                "disabled": True,
+                                "pipelinerun": [
+                                    {
+                                        "pipeline": "disk-image",
+                                        "image_type": "qcow2",
+                                        "config_toml": "config.toml",
+                                    }
+                                ],
+                            },
+                        ]
+                    },
+                }
+            ]
+        }
+        onboard_product.render_pipelinerun_templates(
+            config_data, str(TEMPLATES_PIPELINERUN), str(tmp_path)
+        )
+
+        active_dir = tmp_path / "org" / "repo/active" / "sub1"
+        disk_dir = tmp_path / "org" / "repo/disk" / "sub2"
+
+        assert not (active_dir / "Containerfile").exists()
+        assert not (active_dir / "args1.conf").exists()
+
+        assert not (disk_dir / "Containerfile").exists()
+        assert not (disk_dir / "config.toml").exists()
+
+    def test_krd_output_unchanged_for_disabled_component(self, tmp_path_factory):
+        tmp1 = tmp_path_factory.mktemp("krd_enabled")
+        tmp2 = tmp_path_factory.mktemp("krd_disabled")
+
+        def make_config(disabled):
+            return {
+                "definitions": [
+                    {
+                        "application": "app",
+                        "tenant": "tenant",
+                        "branch": "main",
+                        "components": {
+                            "items": [
+                                {
+                                    "name": "comp-1",
+                                    "url": "https://gitlab.com/org/repo/comp-1",
+                                    "disabled": disabled,
+                                    "pipelinerun": [
+                                        {
+                                            "pipeline": "full-container",
+                                            "build_args_file": "args.conf",
+                                        }
+                                    ],
+                                }
+                            ]
+                        },
+                    }
+                ]
+            }
+
+        onboard_product.render_krd_templates(make_config(False), str(TEMPLATES_KRD), str(tmp1))
+        onboard_product.render_krd_templates(make_config(True), str(TEMPLATES_KRD), str(tmp2))
+
+        files1 = {p.relative_to(tmp1): load_yaml(p) for p, _ in iter_yaml_files(tmp1)}
+        files2 = {p.relative_to(tmp2): load_yaml(p) for p, _ in iter_yaml_files(tmp2)}
+
+        assert files1 == files2
+
+
+# ---------------------------------------------------------------------------
 # Pipelinerun: CEL expressions
 # ---------------------------------------------------------------------------
 

@@ -22,14 +22,14 @@ metadata:
 {%- for path in cel_path_changed %}
           "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
 {%- endfor %}
-      )
+      ){% if disabled %} && false{% endif %}
 {%- else %}
 {%- if cel_push_tag_prefixes %}
       event == "push" && (
 {%- for prefix in cel_push_tag_prefixes %}
       target_branch.startsWith("refs/tags/[[ prefix ]]")[[ " ||" if not loop.last else "" ]]
 {%- endfor %}
-      )
+      ){% if disabled %} && false{% endif %}
 {%- else %}
       event == "push" && target_branch == "[[ branch ]]" && (
           ".tekton/[[ base_component_name ]]-on-push.yaml".pathChanged() ||
@@ -38,7 +38,7 @@ metadata:
 {%- for path in cel_path_changed %}
           "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
 {%- endfor %}
-      )
+      ){% if disabled %} && false{% endif %}
 {%- endif %}
 {%- endif %}
   labels:
