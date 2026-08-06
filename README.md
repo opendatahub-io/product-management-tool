@@ -409,6 +409,7 @@ definitions:
 ### Optional Fields
 
 **Component-level:**
+- `disabled` - Disable build triggers by appending `&& false` to CEL expressions (default: false). For `full-container` pipelines, also generates placeholder `Containerfile` and build-args file if missing. KRD resources are still generated.
 - `tech_preview` - Mark component as tech preview; controls which prod RPA it appears in (default: false)
 - `variant` - Build variant for multi-variant builds
 - `build_platforms` - Target architectures (default: pipeline defaults)

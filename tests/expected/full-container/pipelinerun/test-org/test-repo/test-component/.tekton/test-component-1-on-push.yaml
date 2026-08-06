@@ -11,7 +11,7 @@ metadata:
       event == "push" && (
       target_branch.startsWith("refs/tags/v") ||
       target_branch.startsWith("refs/tags/test-variant-v")
-      )
+      ) && false
   labels:
     appstudio.openshift.io/application: test-full-container-test-branch-1-0
     appstudio.openshift.io/component: test-component-1-test-branch-1-0

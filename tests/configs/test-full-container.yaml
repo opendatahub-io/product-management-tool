@@ -11,6 +11,7 @@ definitions:
           pipeline: full-container
       items:
         - name: test-component-1
+          disabled: true
           context: ./test-context
           dockerfile: TestContainerfile-1
           url: https://gitlab.com/test-org/test-repo/test-component
