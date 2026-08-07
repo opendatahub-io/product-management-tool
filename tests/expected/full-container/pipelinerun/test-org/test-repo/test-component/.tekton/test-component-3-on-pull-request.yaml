@@ -1,0 +1,76 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  annotations:
+    build.appstudio.openshift.io/repo: https://gitlab.com/test-org/test-repo/test-component/-/tree/{{revision}}
+    build.appstudio.redhat.com/commit_sha: "{{revision}}"
+    build.appstudio.redhat.com/pull_request_number: "{{pull_request_number}}"
+    build.appstudio.redhat.com/target_branch: "{{target_branch}}"
+    pipelinesascode.tekton.dev/cancel-in-progress: "true"
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "pull_request" && target_branch == "test-branch-1.0" && (
+          ".tekton/test-component-3-on-pull-request.yaml".pathChanged() ||
+          "argfile-test.conf".pathChanged() ||
+          "Containerfile".pathChanged()
+      )
+  labels:
+    appstudio.openshift.io/application: test-full-container-test-branch-1-0
+    appstudio.openshift.io/component: test-component-3-test-branch-1-0
+    pipelines.appstudio.openshift.io/type: build
+  name: test-component-3-test-branch-1-0-on-pull-request
+  namespace: test-tenant
+spec:
+  timeouts:
+    pipeline: "2h0m0s"
+    tasks: "1h30m0s"
+    finally: "15m0s"
+  params:
+  - name: git-url
+    value: "{{source_url}}"
+  - name: revision
+    value: "{{revision}}"
+  - name: output-image
+    value: quay.io/redhat-user-workloads/test-tenant/test-full-container-test-branch-1-0/test-component-3-test-branch-1-0:on-pr-{{revision}}
+  - name: image-expires-after
+    value: 5d
+  - name: dockerfile
+    value: Containerfile
+  - name: path-context
+    value: submodule/build
+  - name: build-args-file
+    value: argfile-test.conf
+  - name: labels
+    value:
+    - name=test-org-prod/test-component-3-prod
+    - com.redhat.component=test-org-prod/test-component-3-prod-container
+    - cpe=cpe:/a:redhat:test_product:1.0::el9
+    - maintainer=Test Vendor
+    - summary=Test Component 3 in Submodule
+  - name: additional-build-secret
+    value: "test-registry-secret-3"
+  pipelineRef:
+    params:
+    - name: org
+      value: redhat
+    - name: repo
+      value: rhel-ai/konflux-data
+    - name: scmType
+      value: gitlab
+    - name: serverURL
+      value: https://gitlab.com
+    - name: revision
+      value: main
+    - name: pathInRepo
+      value: pipelines/full-container.yaml
+    - name: token
+      value: pipelines-as-code-secret
+    - name: tokenKey
+      value: password
+    resolver: git
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-test-component-3-test-branch-1-0
+  workspaces:
+  - name: git-auth
+    secret:
+      secretName: "{{ git_auth_secret }}"
