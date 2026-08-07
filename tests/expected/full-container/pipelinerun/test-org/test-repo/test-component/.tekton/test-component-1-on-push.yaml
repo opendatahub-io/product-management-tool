@@ -50,6 +50,7 @@ spec:
   - name: labels
     value:
     - cpe=cpe:/a:redhat:test_product:1.0::el9
+    - maintainer=Test Vendor
   - name: squash-build
     value: "true"
   - name: additional-build-secret

@@ -459,6 +459,73 @@ def test_normalize_component_config_rpa_values_merge():
     assert rv["filename"] == "file.iso"
 
 
+def test_normalize_component_config_labels_lists_combined():
+    config = {
+        "common": {
+            "pipelinerun": {
+                "pipeline": "full-container",
+                "labels": [
+                    "maintainer=Common Vendor",
+                    "summary=Common Summary",
+                ],
+            }
+        },
+        "items": [
+            {
+                "name": "comp-with-own-labels",
+                "url": "https://example.com",
+                "pipelinerun": [
+                    {
+                        "build_args_file": "build.conf",
+                        "labels": ["io.openshift.tags=custom tags"],
+                    }
+                ],
+            },
+            {
+                "name": "comp-override-common-label",
+                "url": "https://example.com",
+                "pipelinerun": [
+                    {
+                        "build_args_file": "build.conf",
+                        "labels": [
+                            "summary=Override Summary",
+                            "description=New Description",
+                        ],
+                    }
+                ],
+            },
+            {
+                "name": "comp-no-own-labels",
+                "url": "https://example.com",
+                "pipelinerun": [{"build_args_file": "build.conf"}],
+            },
+        ],
+    }
+    result = onboard_product.normalize_component_config(config)
+
+    # Item with different labels: all combined
+    pr0 = result[0]["pipelinerun"][0]
+    assert "maintainer=Common Vendor" in pr0["labels"]
+    assert "summary=Common Summary" in pr0["labels"]
+    assert "io.openshift.tags=custom tags" in pr0["labels"]
+    assert len(pr0["labels"]) == 3
+
+    # Item that overrides a common label key: item wins, no duplicates
+    pr1 = result[1]["pipelinerun"][0]
+    keys1 = [l.split("=", 1)[0] for l in pr1["labels"]]
+    assert keys1.count("summary") == 1
+    assert "summary=Override Summary" in pr1["labels"]
+    assert "summary=Common Summary" not in pr1["labels"]
+    assert "maintainer=Common Vendor" in pr1["labels"]
+    assert "description=New Description" in pr1["labels"]
+    assert len(pr1["labels"]) == 3
+
+    # Item with no own labels: common labels inherited as-is
+    pr2 = result[2]["pipelinerun"][0]
+    assert len(pr2["labels"]) == 2
+    assert pr2["labels"] == config["common"]["pipelinerun"]["labels"]
+
+
 def test_normalize_component_config_invalid_format_raises():
     with pytest.raises(ValueError):
         onboard_product.normalize_component_config("invalid")

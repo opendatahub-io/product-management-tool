@@ -49,6 +49,9 @@ spec:
     - name=test-org-prod/test-component-2-prod
     - com.redhat.component=test-org-prod/test-component-2-prod-container
     - cpe=cpe:/a:redhat:test_product:1.0::el9
+    - maintainer=Test Vendor
+    - io.openshift.tags=test component tags
+    - summary=Test Component 2 Summary
   - name: additional-build-secret
     value: "test-registry-secret-2"
   - name: snyk-project-name
