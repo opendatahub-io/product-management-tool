@@ -5,3 +5,4 @@ namespace: test-tenant
 resources:
   - test-component-1-test-branch-1-0.yaml
   - test-component-2-test-branch-1-0.yaml
+  - test-component-3-test-branch-1-0.yaml

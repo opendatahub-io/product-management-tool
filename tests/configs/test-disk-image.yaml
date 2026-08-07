@@ -18,7 +18,7 @@ definitions:
             - pipeline: disk-image
               image_type: iso
               config_toml: config/config-test-iso.toml
-              path_context: ./test-disk-build/
+              path_context: "test-disk-context/test-disk-build/"
               build_platforms:
                 - linux-root/amd64
                 - linux-root/arm64
