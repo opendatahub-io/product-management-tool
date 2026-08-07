@@ -837,6 +837,8 @@ def render_pipelinerun_templates(
                     if raw_context.strip("/").removeprefix("./") in ("", ".")
                     else raw_context.strip("/").removeprefix("./")
                 )
+                path_context = prefix_repo_path(ctx_prefix, path_context)
+
                 # Select template based on pipeline type
                 if pipeline == "disk-image":
                     template_name = "disk-image.yaml.j2"

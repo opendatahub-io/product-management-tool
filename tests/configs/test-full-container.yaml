@@ -27,7 +27,7 @@ definitions:
           pipelinerun:
             - build_args_file: test-args/build.conf
               variant: test-variant
-              path_context: "test-context/test-build-context/"
+              path_context: ./test-build-context/
               build_platforms:
                 - linux/x86_64
                 - linux/arm64
@@ -70,7 +70,7 @@ definitions:
           pipelinerun:
             - build_args_file: test-args/build-2.conf
               variant: test-variant-2
-              path_context: "test-context-2/test-build-context-2/"
+              path_context: ./test-build-context-2/
               build_platforms:
                 - linux/x86_64
                 - linux/arm64
@@ -85,25 +85,6 @@ definitions:
                   value: test-snyk-project-2
                 - name: snyk-org
                   value: test-snyk-org-uuid-2
-              timeouts:
-                pipeline: "2h0m0s"
-                tasks: "1h30m0s"
-                finally: "15m0s"
-
-        - name: test-component-3
-          context: submodule/build
-          dockerfile: Containerfile
-          url: https://gitlab.com/test-org/test-repo/test-component
-          stage_repository: quay.io/test-org/test-component-3-stage
-          prod_repository: quay.io/test-org-prod/test-component-3-prod
-          pipelinerun:
-            - build_args_file: args.conf
-              path_context: "submodule/build"
-              labels:
-                - summary=Test Component 3 in Submodule
-              params:
-                - name: additional-build-secret
-                  value: test-registry-secret-3
               timeouts:
                 pipeline: "2h0m0s"
                 tasks: "1h30m0s"
