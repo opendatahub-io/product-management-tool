@@ -837,7 +837,8 @@ def render_pipelinerun_templates(
                     if raw_context.strip("/").removeprefix("./") in ("", ".")
                     else raw_context.strip("/").removeprefix("./")
                 )
-                if ctx_prefix and path_context == ctx_prefix:
+                normalized_path_context = path_context.strip("/").removeprefix("./")
+                if ctx_prefix and normalized_path_context == ctx_prefix:
                     ctx_prefix = ""
                 path_context = prefix_repo_path(ctx_prefix, path_context)
 
