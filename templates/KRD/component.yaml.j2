@@ -7,8 +7,8 @@ metadata:
     build.appstudio.openshift.io/build-nudge-simple-branch: "true"
 {%- endif %}
     build.appstudio.openshift.io/request: {% if is_main_branch %}configure-pac{% else %}configure-pac-no-mr{% endif %}
-    git-provider: gitlab
-    git-provider-url: "https://gitlab.com"
+    git-provider: [[ git_provider ]]
+    git-provider-url: "[[ git_provider_url ]]"
 {%- if not mintmaker_enabled %}
     mintmaker.appstudio.redhat.com/disabled: true
 {%- endif %}
@@ -22,7 +22,9 @@ spec:
 {%- endfor %}
 {%- endif %}
   componentName: [[ component_name ]]
-  secret: pipelines-as-code-secret
+{%- if git_provider_secret %}
+  secret: [[ git_provider_secret ]]
+{%- endif %}
   skipGitOpsResourceGeneration: true
   source:
     git:

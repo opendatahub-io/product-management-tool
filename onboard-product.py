@@ -1237,6 +1237,15 @@ def render_krd_templates(
         comp_template = env.get_template("component.yaml.j2")
         imagerepo_template = env.get_template("imagerepository.yaml.j2")
 
+        git_platforms = {
+            "github.com": {"provider": "github", "url": "https://github.com", "secret": ""},
+            "gitlab.com": {
+                "provider": "gitlab",
+                "url": "https://gitlab.com",
+                "secret": "pipelines-as-code-secret",
+            },
+        }
+
         for component in components:
             base_component_name = component["name"]
             component_name = get_component_name(base_component_name, branch)
@@ -1249,14 +1258,25 @@ def render_krd_templates(
             # Apply branch-aware naming to build nudge references
             build_nudges_ref = [get_component_name(ref, branch) for ref in build_nudges_ref]
 
+            component_url = component["url"]
+            host = (urlparse(component_url).hostname or "").lower()
+            if host not in git_platforms:
+                sys.exit(
+                    f"Error: Unknown git host '{host}' for component '{component_name}'. Supported hosts: {', '.join(git_platforms.keys())}"
+                )
+            platform = git_platforms[host]
+
             comp_content = comp_template.render(
                 application_name=versioned_app_name,
                 component_name=component_name,
                 component_context=component.get("context", component.get("contenxt", ".")),
                 component_dockerfile=component.get("dockerfile", "Containerfile"),
-                component_url=component["url"],
+                component_url=component_url,
                 component_revision=branch,
                 is_main_branch=(branch == "main"),
+                git_provider=platform["provider"],
+                git_provider_url=platform["url"],
+                git_provider_secret=platform["secret"],
                 build_nudge_enabled=build_nudge_enabled,
                 build_nudges_ref=build_nudges_ref,
                 mintmaker_enabled=mintmaker_enabled,
