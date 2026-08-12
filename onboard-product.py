@@ -358,8 +358,10 @@ def normalize_component_config(components_config):
                 common_labels = common_pipelinerun.get("labels", [])
                 item_labels = pr_entry.get("labels", [])
                 if common_labels or item_labels:
-                    item_keys = {l.split("=", 1)[0] for l in item_labels}
-                    combined = [l for l in common_labels if l.split("=", 1)[0] not in item_keys]
+                    item_keys = {label.split("=", 1)[0] for label in item_labels}
+                    combined = [
+                        label for label in common_labels if label.split("=", 1)[0] not in item_keys
+                    ]
                     combined.extend(item_labels)
                     merged_pr["labels"] = combined
 
@@ -924,9 +926,9 @@ def render_pipelinerun_templates(
                 # Append config-defined labels (config overrides auto-generated on key collision)
                 config_labels = pipelinerun_config.get("labels", [])
                 if config_labels:
-                    config_keys = {l.split("=", 1)[0] for l in config_labels}
+                    config_keys = {label.split("=", 1)[0] for label in config_labels}
                     pipelinerun_labels = [
-                        l for l in labels if l.split("=", 1)[0] not in config_keys
+                        label for label in labels if label.split("=", 1)[0] not in config_keys
                     ]
                     pipelinerun_labels.extend(config_labels)
                 else:

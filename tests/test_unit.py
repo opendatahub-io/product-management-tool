@@ -512,7 +512,7 @@ def test_normalize_component_config_labels_lists_combined():
 
     # Item that overrides a common label key: item wins, no duplicates
     pr1 = result[1]["pipelinerun"][0]
-    keys1 = [l.split("=", 1)[0] for l in pr1["labels"]]
+    keys1 = [label.split("=", 1)[0] for label in pr1["labels"]]
     assert keys1.count("summary") == 1
     assert "summary=Override Summary" in pr1["labels"]
     assert "summary=Common Summary" not in pr1["labels"]

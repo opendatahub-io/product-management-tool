@@ -1055,14 +1055,12 @@ class TestPipelinerunLabels:
         )
         for path, doc in iter_yaml_files(out_dir):
             params = {
-                p["name"]: p["value"]
-                for p in doc.get("spec", {}).get("params", [])
-                if "name" in p
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
             }
             if "labels" not in params:
                 continue
             label_list = params["labels"]
-            cpe_labels = [l for l in label_list if l.startswith("cpe=")]
+            cpe_labels = [label for label in label_list if label.startswith("cpe=")]
             assert len(cpe_labels) == 1, (
                 f"{path}: expected exactly one cpe label, got: {cpe_labels}"
             )
