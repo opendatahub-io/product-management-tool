@@ -2,25 +2,5 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "local>redhat/rhel-ai/renovate-config"
-  ],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "description": "Update central-linter template version in GitLab CI",
-      "managerFilePatterns": [
-        "^\\.gitlab-ci\\.yml$"
-      ],
-      "matchStrings": [
-        "project:\\s*'redhat/rhel-ai/ci-cd/central-linter'\\s+file:\\s*'[^']*'\\s+ref:\\s*(?<currentValue>v[^\\s]+)"
-      ],
-      "datasourceTemplate": "gitlab-releases",
-      "depNameTemplate": "redhat/rhel-ai/ci-cd/central-linter"
-    }
-  ],
-  "packageRules": [
-    {
-      "matchPackageNames": ["redhat/rhel-ai/ci-cd/central-linter"],
-      "groupName": "central-linter"
-    }
   ]
 }

@@ -19,7 +19,8 @@ This is a Python CLI tool with a single main script architecture:
 - **`templates/pipelinerun/`** -- Jinja2 templates for Tekton pipelinerun YAML files (`full-container.yaml.j2`, `disk-image.yaml.j2`).
 - **`tests/`** -- End-to-end regression tests comparing generated output against expected files in `tests/expected/`.
 - **`Containerfile`** -- Container image definition using UBI9 Python 3.12 + uv.
-- **`.gitlab-ci.yml`** -- CI pipeline with lint, test, build (multi-arch), manifest, and release stages.
+- **`.github/workflows/ci.yml`** -- Test and lint jobs (`test`, `lint-format`, `lint-check`), run on every PR and required to pass before merge.
+- **`.github/workflows/container-publish.yml`** -- Multi-arch container build, manifest, and release, run on push to `main` and version tags.
 
 ### Key Design Patterns
 
@@ -151,19 +152,18 @@ Tests are in `tests/test_generation.py` with three test classes: `TestGeneration
 - Not resolving paths to absolute paths (causes inconsistencies when CWD changes).
 - Exposing sensitive defaults (e.g., hardcoded user-specific paths).
 
-### 9. CI/CD Pipeline (`.gitlab-ci.yml`)
+### 9. CI/CD Pipeline (`.github/workflows/`)
 
 **Required:**
-- Pipeline stages: `lint`, `test`, `build`, `manifest`, `release`.
-- Python jobs extend `.python_base` (UBI9 Python 3.11 image with uv).
-- Multi-arch builds use parallel matrix with `aipcc` (amd64) and `aipcc-small-aarch64` (arm64) runners.
-- Container images pushed to GitLab registry and Quay.io on release.
+- `ci.yml` runs `test`, `lint-format`, and `lint-check` as separate jobs on every pull request and on push to `main`; all three are required status checks.
+- `container-publish.yml` runs `build` (multi-arch matrix: `ubuntu-24.04` for amd64, `ubuntu-24.04-arm` for arm64) → `manifest` → `release`, triggered only on push to `main` and version tags (`v*`) -- never on `pull_request`, since Quay credentials must not be exposed to fork PRs on this public repo.
+- Container images are built via the existing `Makefile` targets (`make build`, `make push`, `make manifest-*`, `make tag`, `make release`) using `podman`, pushed to Quay.io only.
 - Renovate manages dependency updates via `renovate.json` extending shared config.
 
 **Anti-patterns:**
-- Adding jobs without proper stage assignment.
-- Breaking multi-arch build matrix.
-- Using incorrect runner tags.
+- Adding image build/push steps to a `pull_request`-triggered job (credential exposure risk on this public repo).
+- Diverging the workflow's build steps from the `Makefile` targets instead of reusing them.
+- Breaking the multi-arch build matrix or using unpinned runner versions (e.g. `ubuntu-latest` instead of a pinned version like `ubuntu-24.04`).
 
 ### 10. Python Code Quality
 
