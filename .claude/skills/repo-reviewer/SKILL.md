@@ -159,11 +159,13 @@ Tests are in `tests/test_generation.py` with three test classes: `TestGeneration
 - `container-publish.yml` runs `build` (multi-arch matrix: `ubuntu-24.04` for amd64, `ubuntu-24.04-arm` for arm64) → `manifest` → `release`, triggered only on push to `main` and version tags (`v*`) -- never on `pull_request`, since Quay credentials must not be exposed to fork PRs on this public repo.
 - Container images are built via the existing `Makefile` targets (`make build`, `make push`, `make manifest-*`, `make tag`, `make release`) using `podman`, pushed to Quay.io only.
 - Renovate manages dependency updates via `renovate.json` extending shared config.
+- Every `uses:` reference must be pinned to a full 40-character commit SHA (with a `# vX.Y.Z` comment for readability), not a mutable tag like `@v4`. Every job needs an explicit `permissions: contents: read` (workflow-level is fine), and every `actions/checkout` step needs `persist-credentials: false`.
 
 **Anti-patterns:**
 - Adding image build/push steps to a `pull_request`-triggered job (credential exposure risk on this public repo).
 - Diverging the workflow's build steps from the `Makefile` targets instead of reusing them.
 - Breaking the multi-arch build matrix or using unpinned runner versions (e.g. `ubuntu-latest` instead of a pinned version like `ubuntu-24.04`).
+- Referencing a GitHub Action by mutable tag instead of a pinned commit SHA (supply-chain risk -- see CVE-2025-30066).
 
 ### 10. Python Code Quality
 
