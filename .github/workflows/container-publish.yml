@@ -1,0 +1,62 @@
+name: Container Publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install podman
+        run: sudo apt-get update && sudo apt-get install -y podman
+      - name: Log in to Quay
+        run: podman login "${{ secrets.QUAY_REGISTRY }}" -u "${{ secrets.QUAY_REGISTRY_USER }}" --password-stdin <<< "${{ secrets.QUAY_REGISTRY_PASSWORD }}"
+      - name: Build
+        run: make build
+      - name: Push
+        run: make push
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install podman
+        run: sudo apt-get update && sudo apt-get install -y podman
+      - name: Log in to Quay
+        run: podman login "${{ secrets.QUAY_REGISTRY }}" -u "${{ secrets.QUAY_REGISTRY_USER }}" --password-stdin <<< "${{ secrets.QUAY_REGISTRY_PASSWORD }}"
+      - name: Create and push manifest
+        run: |
+          make manifest-create
+          make manifest-build
+          make manifest-push
+      - name: Tag and push latest (main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          make tag
+          IMAGE_TAG=latest make manifest-push
+
+  release:
+    needs: manifest
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install skopeo
+        run: sudo apt-get update && sudo apt-get install -y skopeo
+      - name: Log in to Quay
+        run: skopeo login "${{ secrets.QUAY_REGISTRY }}" -u "${{ secrets.QUAY_REGISTRY_USER }}" --password-stdin <<< "${{ secrets.QUAY_REGISTRY_PASSWORD }}"
+      - name: Release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: make release
