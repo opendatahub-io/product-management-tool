@@ -19,7 +19,7 @@ This is a Python CLI tool with a single main script architecture:
 - **`templates/pipelinerun/`** -- Jinja2 templates for Tekton pipelinerun YAML files (`full-container.yaml.j2`, `disk-image.yaml.j2`).
 - **`tests/`** -- End-to-end regression tests comparing generated output against expected files in `tests/expected/`.
 - **`Containerfile`** -- Container image definition using UBI9 Python 3.12 + uv.
-- **`.gitlab-ci.yml`** -- CI pipeline with lint, test, build (multi-arch), manifest, and release stages.
+- **`.github/workflows/ci.yml`** -- Test and lint jobs (`test`, `lint-format`, `lint-check`), run on every PR and required to pass before merge.
 
 ### Key Design Patterns
 
@@ -151,19 +151,17 @@ Tests are in `tests/test_generation.py` with three test classes: `TestGeneration
 - Not resolving paths to absolute paths (causes inconsistencies when CWD changes).
 - Exposing sensitive defaults (e.g., hardcoded user-specific paths).
 
-### 9. CI/CD Pipeline (`.gitlab-ci.yml`)
+### 9. CI/CD Pipeline (`.github/workflows/`)
 
 **Required:**
-- Pipeline stages: `lint`, `test`, `build`, `manifest`, `release`.
-- Python jobs extend `.python_base` (UBI9 Python 3.11 image with uv).
-- Multi-arch builds use parallel matrix with `aipcc` (amd64) and `aipcc-small-aarch64` (arm64) runners.
-- Container images pushed to GitLab registry and Quay.io on release.
+- `ci.yml` runs `test`, `lint-format`, and `lint-check` as separate jobs on every pull request and on push to `main`; all three are required status checks.
 - Renovate manages dependency updates via `renovate.json` extending shared config.
+- Every `uses:` reference must be pinned to a full 40-character commit SHA (with a `# vX.Y.Z` comment for readability), not a mutable tag like `@v4`. Every job needs an explicit `permissions: contents: read` (workflow-level is fine), and every `actions/checkout` step needs `persist-credentials: false`.
 
 **Anti-patterns:**
-- Adding jobs without proper stage assignment.
-- Breaking multi-arch build matrix.
-- Using incorrect runner tags.
+- Adding image build/push steps to a `pull_request`-triggered job (credential exposure risk on this public repo).
+- Breaking required status check jobs in `ci.yml`.
+- Referencing a GitHub Action by mutable tag instead of a pinned commit SHA (supply-chain risk -- see CVE-2025-30066).
 
 ### 10. Python Code Quality
 
