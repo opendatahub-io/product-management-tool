@@ -354,6 +354,17 @@ def normalize_component_config(components_config):
                     combined.extend(item_params)
                     merged_pr["params"] = combined
 
+                # labels lists are combined (common + item), item overrides on key collision
+                common_labels = common_pipelinerun.get("labels", [])
+                item_labels = pr_entry.get("labels", [])
+                if common_labels or item_labels:
+                    item_keys = {label.split("=", 1)[0] for label in item_labels}
+                    combined = [
+                        label for label in common_labels if label.split("=", 1)[0] not in item_keys
+                    ]
+                    combined.extend(item_labels)
+                    merged_pr["labels"] = combined
+
                 merged_pipelineruns.append(merged_pr)
             merged["pipelinerun"] = merged_pipelineruns
         elif common_pipelinerun and "pipelinerun" not in component:
@@ -828,6 +839,9 @@ def render_pipelinerun_templates(
                     if raw_context.strip("/").removeprefix("./") in ("", ".")
                     else raw_context.strip("/").removeprefix("./")
                 )
+                normalized_path_context = path_context.strip("/").removeprefix("./")
+                if ctx_prefix and normalized_path_context == ctx_prefix:
+                    ctx_prefix = ""
                 path_context = prefix_repo_path(ctx_prefix, path_context)
 
                 # Select template based on pipeline type
@@ -909,18 +923,28 @@ def render_pipelinerun_templates(
                         for prefix in cel_push_tag_prefixes
                     ]
 
-                for pr_type in ["pull", "push"]:
-                    # Filter labels for full-container when use_build_args is true
-                    # (name and component labels move to build-args, only cpe remains)
-                    pipelinerun_labels = labels
-                    if pipeline == "full-container" and use_build_args:
-                        pipelinerun_labels = [
-                            label
-                            for label in labels
-                            if not label.startswith("name=")
-                            and not label.startswith("com.redhat.component=")
-                        ]
+                # Append config-defined labels (config overrides auto-generated on key collision)
+                config_labels = pipelinerun_config.get("labels", [])
+                if config_labels:
+                    config_keys = {label.split("=", 1)[0] for label in config_labels}
+                    pipelinerun_labels = [
+                        label for label in labels if label.split("=", 1)[0] not in config_keys
+                    ]
+                    pipelinerun_labels.extend(config_labels)
+                else:
+                    pipelinerun_labels = list(labels)
 
+                # Filter labels for full-container when use_build_args is true
+                # (name and component labels move to build-args, only cpe remains)
+                if pipeline == "full-container" and use_build_args:
+                    pipelinerun_labels = [
+                        label
+                        for label in pipelinerun_labels
+                        if not label.startswith("name=")
+                        and not label.startswith("com.redhat.component=")
+                    ]
+
+                for pr_type in ["pull", "push"]:
                     # Prepare template parameters based on pipeline type
                     template_params = {
                         "application_name": versioned_app_name,

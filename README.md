@@ -431,6 +431,20 @@ components:
 **Pipelinerun-level:**
 - `squash-build` - Squash build layers (optional, default: not set)
 - `use_build_args` - Move name/component labels into build-args instead of pipelinerun labels (default: false)
+- `labels` - Additional labels to inject into pipelinerun files as `key=value` strings. Can be specified at the common pipelinerun level (shared across all components) or per-component pipelinerun level. Per-component labels override common labels when they share the same key. Config-defined labels also override auto-generated labels (`name`, `com.redhat.component`, `cpe`) on key collision.
+  ```yaml
+  components:
+    common:
+      pipelinerun:
+        labels:
+          - maintainer=My Team
+    items:
+      - name: my-component
+        pipelinerun:
+          - labels:
+              - summary=My Component Summary
+              - io.openshift.tags=my tags
+  ```
 
 **ReleasePlan-level:**
 - `autorelease_annotation` - Use annotation instead of label for auto-release (default: false)

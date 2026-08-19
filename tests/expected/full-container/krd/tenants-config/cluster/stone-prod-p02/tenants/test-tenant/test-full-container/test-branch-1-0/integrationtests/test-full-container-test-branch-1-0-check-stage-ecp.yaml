@@ -12,6 +12,8 @@ spec:
       name: component_test-component-1-test-branch-1-0
     - description: Component testing for test-component-2-test-branch-1-0
       name: component_test-component-2-test-branch-1-0
+    - description: Component testing for test-component-3-test-branch-1-0
+      name: component_test-component-3-test-branch-1-0
   params:
     - name: POLICY_CONFIGURATION
       value: "rhtap-releng-tenant/registry-rhel-ai-quay-stage"

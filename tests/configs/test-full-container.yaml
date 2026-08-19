@@ -9,6 +9,8 @@ definitions:
       common:
         pipelinerun:
           pipeline: full-container
+          labels:
+            - maintainer=Test Vendor
       items:
         - name: test-component-1
           disabled: true
@@ -73,6 +75,9 @@ definitions:
                 - linux/x86_64
                 - linux/arm64
               skip-checks: false
+              labels:
+                - io.openshift.tags=test component tags
+                - summary=Test Component 2 Summary
               params:
                 - name: additional-build-secret
                   value: test-registry-secret-2
@@ -80,6 +85,25 @@ definitions:
                   value: test-snyk-project-2
                 - name: snyk-org
                   value: test-snyk-org-uuid-2
+              timeouts:
+                pipeline: "2h0m0s"
+                tasks: "1h30m0s"
+                finally: "15m0s"
+
+        - name: test-component-3
+          context: submodule/build
+          dockerfile: Containerfile
+          url: https://gitlab.com/test-org/test-repo/test-component
+          stage_repository: quay.io/test-org/test-component-3-stage
+          prod_repository: quay.io/test-org-prod/test-component-3-prod
+          pipelinerun:
+            - build_args_file: argfile-test.conf
+              path_context: "submodule/build"
+              labels:
+                - summary=Test Component 3 in Submodule
+              params:
+                - name: additional-build-secret
+                  value: test-registry-secret-3
               timeouts:
                 pipeline: "2h0m0s"
                 tasks: "1h30m0s"

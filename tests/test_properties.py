@@ -978,6 +978,96 @@ class TestPipelinerunLabels:
             found = True
         assert found, "No pipelinerun found for test-comp-no-prod-repo"
 
+    def test_config_labels_appear_in_output(self, full_container_pipelinerun):
+        """Config-defined labels (common + per-component) appear in generated pipelineruns."""
+        pr_dir, _ = full_container_pipelinerun
+        for path, doc in iter_yaml_files(pr_dir):
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            if "labels" not in params:
+                continue
+            label_list = params["labels"]
+            # Common label from common.pipelinerun.labels
+            assert "maintainer=Test Vendor" in label_list, (
+                f"{path}: missing common label 'maintainer=Test Vendor': {label_list}"
+            )
+
+    def test_per_component_labels_override_common(self, full_container_pipelinerun):
+        """Per-component labels appear and merge with common labels."""
+        pr_dir, _ = full_container_pipelinerun
+        found = False
+        for path, doc in iter_yaml_files(pr_dir):
+            if "test-component-2" not in path.name:
+                continue
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            assert "labels" in params, f"{path}: missing labels param"
+            label_list = params["labels"]
+            assert "io.openshift.tags=test component tags" in label_list, (
+                f"{path}: missing per-component label: {label_list}"
+            )
+            assert "summary=Test Component 2 Summary" in label_list, (
+                f"{path}: missing per-component summary label: {label_list}"
+            )
+            # Common label should still be present
+            assert "maintainer=Test Vendor" in label_list, (
+                f"{path}: common label missing after merge: {label_list}"
+            )
+            found = True
+        assert found, "No pipelinerun found for test-component-2"
+
+    def test_config_label_overrides_auto_generated_label(self, tmp_path):
+        """Config-defined label with same key as auto-generated label wins."""
+        config_data = {
+            "definitions": [
+                {
+                    "application": "label-collision-test",
+                    "tenant": "test-tenant",
+                    "branch": "main",
+                    "components": {
+                        "common": {
+                            "pipelinerun": {
+                                "pipeline": "full-container",
+                                "labels": ["cpe=custom-cpe-override"],
+                            }
+                        },
+                        "items": [
+                            {
+                                "name": "collision-comp",
+                                "url": "https://gitlab.com/test-org/collision-repo",
+                                "stage_repository": "quay.io/test/collision-stage",
+                                "prod_repository": "quay.io/test/collision-prod",
+                                "pipelinerun": [{"build_args_file": "build.conf"}],
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
+        config_file = tmp_path / "label-collision.yaml"
+        yaml.dump(config_data, config_file)
+        out_dir = tmp_path / "output"
+        out_dir.mkdir()
+        onboard_product.render_pipelinerun_templates(
+            config_data, str(TEMPLATES_PIPELINERUN), str(out_dir)
+        )
+        for path, doc in iter_yaml_files(out_dir):
+            params = {
+                p["name"]: p["value"] for p in doc.get("spec", {}).get("params", []) if "name" in p
+            }
+            if "labels" not in params:
+                continue
+            label_list = params["labels"]
+            cpe_labels = [label for label in label_list if label.startswith("cpe=")]
+            assert len(cpe_labels) == 1, (
+                f"{path}: expected exactly one cpe label, got: {cpe_labels}"
+            )
+            assert cpe_labels[0] == "cpe=custom-cpe-override", (
+                f"{path}: config cpe should override auto-generated, got: {cpe_labels[0]}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Pipelinerun: File pairs

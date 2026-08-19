@@ -25,6 +25,9 @@ spec:
         - name: test-component-2-test-branch-1-0
           repositories:
             - url: quay.io/test-org/test-component-2-stage
+        - name: test-component-3-test-branch-1-0
+          repositories:
+            - url: quay.io/test-org/test-component-3-stage
       defaults:
         pushSourceContainer: true
         tags:
