@@ -1362,7 +1362,7 @@ def render_krd_templates(
                 release_plan_admission_name=rpa_name,
                 tenant_name=tenant,
                 autorelease_annotation=rp.get("autorelease_annotation", False),
-                author=rp.get("author"),
+                author=rp.get("author") or "aipcc-productization",
                 components=component_names,
                 final_pipeline=final_pipeline,
             )

@@ -4,6 +4,7 @@ kind: ReleasePlan
 metadata:
   labels:
     release.appstudio.openshift.io/auto-release: "true"
+    release.appstudio.openshift.io/author: aipcc-productization
     release.appstudio.openshift.io/releasePlanAdmission: "test-release-plan-stage-test-branch-1-0"
     release.appstudio.openshift.io/standing-attribution: "true"
   name: test-release-plan-stage-test-branch-1-0

@@ -229,6 +229,13 @@ class TestKRDReleasePlanResources:
         for path, doc in rp_docs:
             assert "apiVersion" in doc, f"{path}: missing apiVersion"
             assert "metadata" in doc and "name" in doc["metadata"], f"{path}: missing metadata.name"
+            labels = doc.get("metadata", {}).get("labels", {})
+            assert labels.get("release.appstudio.openshift.io/author") == "aipcc-productization", (
+                f"{path}: missing or invalid default author label"
+            )
+            assert labels.get("release.appstudio.openshift.io/standing-attribution") == "true", (
+                f"{path}: missing standing-attribution label"
+            )
             spec = doc.get("spec", {})
             assert "application" in spec, f"{path}: missing spec.application"
             assert "target" in spec, f"{path}: missing spec.target"

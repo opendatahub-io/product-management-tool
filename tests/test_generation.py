@@ -1445,6 +1445,54 @@ class TestRPAValidation:
         ):
             self._render(data)
 
+    def test_release_plan_default_author(self):
+        """ReleasePlan defaults release.appstudio.openshift.io/author to 'aipcc-productization'."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+        )
+        self._render(data)
+        rp = self._read_release_plan("test-stage")
+        assert (
+            rp["metadata"]["labels"]["release.appstudio.openshift.io/author"]
+            == "aipcc-productization"
+        )
+        assert (
+            rp["metadata"]["labels"]["release.appstudio.openshift.io/standing-attribution"]
+            == "true"
+        )
+
+    def test_release_plan_custom_author(self):
+        """ReleasePlan uses explicit author when specified in release_plan config."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+            release_plan_extra={"author": "custom-team"},
+        )
+        self._render(data)
+        rp = self._read_release_plan("test-stage")
+        assert rp["metadata"]["labels"]["release.appstudio.openshift.io/author"] == "custom-team"
+
 
 if __name__ == "__main__":
     # Allow running tests directly
