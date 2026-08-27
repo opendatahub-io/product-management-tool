@@ -10,9 +10,7 @@ metadata:
 {%- if not autorelease_annotation %}
     release.appstudio.openshift.io/auto-release: "[[ release_plan_autorelease ]]"
 {%- endif %}
-{%- if author %}
-    release.appstudio.openshift.io/author: [[ author ]]
-{%- endif %}
+    release.appstudio.openshift.io/author: [[ author | default('aipcc-productization') ]]
     release.appstudio.openshift.io/releasePlanAdmission: "[[ release_plan_admission_name ]]"
     release.appstudio.openshift.io/standing-attribution: "true"
   name: [[ release_plan_name ]]

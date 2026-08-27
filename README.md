@@ -450,7 +450,7 @@ components:
 - `autorelease_annotation` - Use annotation instead of label for auto-release (default: false)
   - When `true`: Generates `annotations.release.appstudio.openshift.io/auto-release` with component list
   - When `false`: Generates `labels.release.appstudio.openshift.io/auto-release` with boolean value
-- `author` - Author label for release plan (e.g., "rhel-ai-team")
+- `author` - Author label for release plan (e.g., "rhel-ai-team", default: "aipcc-productization")
 - `final_pipeline` - Optional pipeline run after release completes (git resolver); omitted when not set
   ```yaml
   release_plan:
