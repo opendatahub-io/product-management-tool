@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 import pytest
+from ruamel.yaml import YAML
 
 from config import Config
 
@@ -150,6 +151,45 @@ def test_yaml_value(value, expected):
 def test_yaml_value_other_type():
     result = onboard_product.yaml_value(["a", "b"])
     assert result == "\"['a', 'b']\""
+
+
+# ---------------------------------------------------------------------------
+# yaml_param_value
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("true", '"true"'),
+        (
+            '[{"type": "rpm", "path": "context/cpu"}]',
+            '\'[{"type": "rpm", "path": "context/cpu"}]\'',
+        ),
+        (True, "true"),
+        (123, "123"),
+    ],
+)
+def test_yaml_param_value(value, expected):
+    result = onboard_product.yaml_param_value(value)
+    assert result == expected
+
+    yaml = YAML(typ="safe")
+    assert yaml.load(f"value: {result}")["value"] == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        'contains \' and "quotes"',
+        "line one\nline two",
+        r'path\\with\\backslash"quoted',
+    ],
+)
+def test_yaml_param_value_handles_special_strings(value):
+    result = onboard_product.yaml_param_value(value)
+    yaml = YAML(typ="safe")
+    assert yaml.load(f"value: {result}")["value"] == value
 
 
 # ---------------------------------------------------------------------------
