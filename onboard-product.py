@@ -36,7 +36,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from jinja2 import Environment, FileSystemLoader
+from jinja2.utils import htmlsafe_json_dumps
 from ruamel.yaml import YAML
+from ruamel.yaml.scalarstring import SingleQuotedScalarString
 
 from config import Config
 
@@ -425,6 +427,25 @@ def yaml_value(value):
         return f'"{str(value)}"'
 
 
+def yaml_param_value(value):
+    """Serialize a PipelineRun parameter as readable, valid YAML.
+
+    Keep the JSON serialization used by Jinja's ``tojson`` filter for values
+    that do not need a more readable representation.  Strings containing
+    double quotes (for example, JSON-valued parameters such as
+    ``prefetch-input``) are emitted as YAML single-quoted scalars so the
+    embedded JSON quotes do not need backslash escaping.
+    """
+    if isinstance(value, str) and '"' in value:
+        stream = StringIO()
+        _yaml_for_filter.dump(SingleQuotedScalarString(value), stream)
+        return stream.getvalue().rstrip("\n")
+
+    # Match Jinja's tojson behavior, including its safe handling of special
+    # HTML characters, for all other values.
+    return htmlsafe_json_dumps(value)
+
+
 def _strip_ruamel_types(value):
     if isinstance(value, dict):
         return {k: _strip_ruamel_types(v) for k, v in value.items()}
@@ -465,6 +486,7 @@ def create_jinja_env(template_dir):
         variable_end_string="]]",
     )
     env.filters["yaml_value"] = yaml_value
+    env.filters["yaml_param_value"] = yaml_param_value
     env.filters["to_yaml"] = to_yaml_filter
     return env
 

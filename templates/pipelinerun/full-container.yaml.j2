@@ -101,7 +101,7 @@ spec:
 {%- endif %}
 {%- for param in extra_params %}
   - name: [[ param.name ]]
-    value: [[ param.value | tojson ]]
+    value: [[ param.value | yaml_param_value ]]
 {%- endfor %}
   pipelineRef:
     params:
