@@ -297,7 +297,7 @@ definitions:
 
 **Available templates:**
 - `its-ecp` - Enterprise Contract Policy tests (uses konflux-ci/build-definitions)
-- `its-konflux-data` - Custom GitLab-based tests (uses rhel-ai/konflux-data)
+- `its-konflux-data` - Custom konflux-data tests (uses red-hat-data-services/aipcc-konflux-data on GitHub)
 
 **When configured:** Creates `integrationtests/` directory with IntegrationTestScenario resources
 **When omitted:** No directory created, kustomization.yaml excludes it automatically
@@ -524,7 +524,7 @@ release_plan_admission:
 - `releaseplan.yaml.j2` - Release plan definition
 - `releaseplanadmission.yaml.j2` - Release admission control (supports both full-container and disk-image pipelines)
 - `its-ecp.yaml.j2` - Enterprise Contract Policy integration tests
-- `its-konflux-data.yaml.j2` - GitLab-based integration tests
+- `its-konflux-data.yaml.j2` - konflux-data integration tests (GitHub: red-hat-data-services/aipcc-konflux-data)
 
 ### Pipelinerun Templates (`templates/pipelinerun/`)
 
