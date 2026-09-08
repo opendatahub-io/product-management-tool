@@ -5,7 +5,7 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
-    build.appstudio.openshift.io/repo: [[ component_url ]]/-/tree/{{revision}}
+    build.appstudio.openshift.io/repo: [[ component_url ]][[ repo_tree_path ]]{{revision}}
     build.appstudio.redhat.com/commit_sha: "{{revision}}"
 {%- if pipelinerun_type == "pull" %}
     build.appstudio.redhat.com/pull_request_number: "{{pull_request_number}}"
@@ -105,22 +105,12 @@ spec:
 {%- endfor %}
   pipelineRef:
     params:
-    - name: org
-      value: redhat
-    - name: repo
-      value: rhel-ai/konflux-data
-    - name: scmType
-      value: gitlab
-    - name: serverURL
-      value: https://gitlab.com
+    - name: url
+      value: https://github.com/red-hat-data-services/aipcc-konflux-data.git
     - name: revision
       value: main
     - name: pathInRepo
       value: [[ path_in_repo ]]
-    - name: token
-      value: pipelines-as-code-secret
-    - name: tokenKey
-      value: password
     resolver: git
 {%- if task_run_specs %}
   taskRunSpecs:

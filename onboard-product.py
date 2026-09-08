@@ -802,6 +802,10 @@ def render_pipelinerun_templates(
             component_name = get_component_name(base_component_name, branch)
             component_url = component["url"]
 
+            # GitHub uses /tree/, GitLab uses /-/tree/ in repo URLs
+            _url_host = (urlparse(component_url).hostname or "").lower()
+            repo_tree_path = "/tree/" if _url_host == "github.com" else "/-/tree/"
+
             # Build labels array for pipelinerun
             labels = []
             if "prod_repository" in component:
@@ -973,6 +977,7 @@ def render_pipelinerun_templates(
                         "component_name": component_name,
                         "base_component_name": base_component_name,
                         "component_url": component_url,
+                        "repo_tree_path": repo_tree_path,
                         "component_dockerfile": prefix_repo_path(
                             ctx_prefix, component.get("dockerfile", "Containerfile")
                         ),

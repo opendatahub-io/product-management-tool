@@ -134,6 +134,15 @@ definitions:
             value: 40m0s
           - name: SINGLE_COMPONENT
             value: "true"
+      - template: its-konflux-data
+        name: check-konflux-data
+        optional: true
+        path_in_repo: pipelines/integration-test.yaml
+        components:
+          - test-component-1
+        params:
+          - name: SINGLE_COMPONENT
+            value: "true"
 
     release_plan:
       - name: test-release-plan-stage
