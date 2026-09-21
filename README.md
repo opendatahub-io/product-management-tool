@@ -382,6 +382,9 @@ definitions:
         url: https://gitlab.com/...       # Repository URL
         stage_repository: quay.io/.../stage  # Stage container registry (full-container only)
         prod_repository: quay.io/.../prod    # OPTIONAL - Production registry (full-container only)
+        release_tags:                        # OPTIONAL - Per-repository Release Service tags
+          - "{{ timestamp }}"
+          - latest
         local_repo_path: /path/to/repo   # OPTIONAL - Override repo path for .tekton files
 
         pipelinerun:
@@ -409,6 +412,7 @@ definitions:
 ### Optional Fields
 
 **Component-level:**
+- `release_tags` - Release Service tags for this component's stage and production repositories. When omitted, RPA-wide `tags` remain in effect.
 - `disabled` - Disable build triggers by appending `&& false` to CEL expressions (default: false). For `full-container` pipelines, also generates placeholder `Containerfile` and build-args file if missing. KRD resources are still generated.
 - `tech_preview` - Mark component as tech preview; controls which prod RPA it appears in (default: false)
 - `variant` - Build variant for multi-variant builds

@@ -20,6 +20,9 @@ definitions:
           stage_repository: quay.io/test-org/test-component-1-stage
           stage_rc_repository: quay.io/test-org/test-component-1-rc
           prod_repository: quay.io/test-org-prod/test-component-1-prod
+          release_tags:
+            - "{{ labels.example.version }}"
+            - "{{ timestamp }}"
 
           component:
             mintmaker_enabled: true
