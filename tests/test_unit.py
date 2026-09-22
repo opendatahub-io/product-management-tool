@@ -36,6 +36,7 @@ spec.loader.exec_module(onboard_product)
         ("UPPER", "upper"),
         ("no-dots", "no-dots"),
         ("1.2.3", "1-2-3"),
+        ("release/trailing", "release-trailing"),
     ],
 )
 def test_canonicalize(value, expected):
@@ -79,6 +80,7 @@ def test_prefix_repo_path(prefix, path, expected):
         ("llama-stack", "rhoai-2.23", "llama-stack-rhoai-2-23"),
         ("my-app", "release-1.0", "my-app-release-1-0"),
         ("my-app", "feature-branch", "my-app-feature-branch"),
+        ("base-images", "release/trailing", "base-images-release-trailing"),
     ],
 )
 def test_get_application_name(base_name, branch, expected):
@@ -91,6 +93,11 @@ def test_get_application_name(base_name, branch, expected):
         ("bootc-cuda", "main", "bootc-cuda"),
         ("bootc-cuda", "rhoai-2.23", "bootc-cuda-rhoai-2-23"),
         ("my-component", "release-1.0", "my-component-release-1-0"),
+        (
+            "base-image-cpu",
+            "release/trailing",
+            "base-image-cpu-release-trailing",
+        ),
     ],
 )
 def test_get_component_name(base_name, branch, expected):
@@ -116,6 +123,14 @@ def test_get_branch_info_defaults_to_main():
     assert branch == "main"
     assert normalized == "main"
     assert versioned == "my-app"
+
+
+def test_get_branch_info_slash_branch():
+    definition = {"application": "base-images", "branch": "release/trailing"}
+    branch, normalized, versioned = onboard_product.get_branch_info(definition)
+    assert branch == "release/trailing"
+    assert normalized == "release-trailing"
+    assert versioned == "base-images-release-trailing"
 
 
 def test_get_branch_info_main_branch():

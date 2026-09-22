@@ -84,8 +84,8 @@ To make changes, update the PMC configs and re-run PMT:
 
 
 def canonicalize(value):
-    """Convert dots to dashes and lowercase for filename-safe resource names."""
-    return value.replace(".", "-").lower()
+    """Convert dots and slashes to dashes for filename-safe resource names."""
+    return value.replace(".", "-").replace("/", "-").lower()
 
 
 def prefix_repo_path(prefix, path):
