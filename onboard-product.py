@@ -880,7 +880,9 @@ def render_pipelinerun_templates(
                     # Extract full-container specific parameters
                     raw_build_args_file = pipelinerun_config["build_args_file"]
                     if isinstance(raw_build_args_file, list):
-                        build_args_file = [prefix_repo_path(ctx_prefix, f) for f in raw_build_args_file]
+                        build_args_file = [
+                            prefix_repo_path(ctx_prefix, f) for f in raw_build_args_file
+                        ]
                     else:
                         build_args_file = prefix_repo_path(ctx_prefix, raw_build_args_file)
                     variant = pipelinerun_config.get("variant", "")
@@ -899,7 +901,11 @@ def render_pipelinerun_templates(
                                 f"Generated placeholder Containerfile for '{component_name}' at {cfile_path}"
                             )
 
-                        argfile_paths = build_args_file if isinstance(build_args_file, list) else [build_args_file]
+                        argfile_paths = (
+                            build_args_file
+                            if isinstance(build_args_file, list)
+                            else [build_args_file]
+                        )
                         for argfile_path in argfile_paths:
                             if not os.path.exists(os.path.join(repo_path, argfile_path)):
                                 full_path = os.path.join(repo_path, argfile_path)
