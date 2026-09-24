@@ -878,8 +878,13 @@ def render_pipelinerun_templates(
                 elif pipeline == "full-container":
                     template_name = "full-container.yaml.j2"
                     # Extract full-container specific parameters
-                    build_args_file = pipelinerun_config["build_args_file"]
-                    build_args_file = prefix_repo_path(ctx_prefix, build_args_file)
+                    raw_build_args_file = pipelinerun_config["build_args_file"]
+                    if isinstance(raw_build_args_file, list):
+                        build_args_file = [
+                            prefix_repo_path(ctx_prefix, f) for f in raw_build_args_file
+                        ]
+                    else:
+                        build_args_file = prefix_repo_path(ctx_prefix, raw_build_args_file)
                     variant = pipelinerun_config.get("variant", "")
                     skip_checks = pipelinerun_config.get("skip-checks", False)
                     use_build_args = pipelinerun_config.get("use_build_args", False)
@@ -896,13 +901,19 @@ def render_pipelinerun_templates(
                                 f"Generated placeholder Containerfile for '{component_name}' at {cfile_path}"
                             )
 
-                        argfile_path = os.path.join(repo_path, build_args_file)
-                        if not os.path.exists(argfile_path):
-                            ensure_dirs(os.path.dirname(argfile_path))
-                            write_with_newline(argfile_path, PLACEHOLDER_ARGFILE)
-                            print(
-                                f"Generated placeholder argfile for '{component_name}' at {argfile_path}"
-                            )
+                        argfile_paths = (
+                            build_args_file
+                            if isinstance(build_args_file, list)
+                            else [build_args_file]
+                        )
+                        for argfile_path in argfile_paths:
+                            if not os.path.exists(os.path.join(repo_path, argfile_path)):
+                                full_path = os.path.join(repo_path, argfile_path)
+                                ensure_dirs(os.path.dirname(full_path))
+                                write_with_newline(full_path, PLACEHOLDER_ARGFILE)
+                                print(
+                                    f"Generated placeholder argfile for '{component_name}' at {full_path}"
+                                )
 
                     # Build build_args array from config and/or use_build_args
                     build_args = list(pipelinerun_config.get("build_args", []))
