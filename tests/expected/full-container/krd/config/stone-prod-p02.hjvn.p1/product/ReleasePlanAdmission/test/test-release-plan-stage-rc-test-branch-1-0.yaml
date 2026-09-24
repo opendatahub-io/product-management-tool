@@ -22,6 +22,9 @@ spec:
         - name: test-component-1-test-branch-1-0
           repositories:
             - url: quay.io/test-org/test-component-1-rc
+              tags:
+                - "{{ labels.example.version }}"
+                - "{{ timestamp }}"
         - name: test-component-2-test-branch-1-0
           repositories:
             - url: quay.io/test-org-prod/test-component-2-prod

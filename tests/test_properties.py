@@ -2019,6 +2019,27 @@ class TestKRDValueAssertions:
                 f"prod_repository '{prod_repo}' not found in RPA for '{comp_name}': {repos}"
             )
 
+    def test_rpa_component_release_tags_match_config(self, full_container_krd):
+        krd_dir, data = full_container_krd
+        definition = data["definitions"][0]
+        components = onboard_product.normalize_component_config(definition.get("components", []))
+        branch, normalized, _ = onboard_product.get_branch_info(definition)
+
+        stage_rpa_name = self._rpa_generated_name("test-release-plan-stage", normalized)
+        _, stage_doc = self._find_rpa_by_exact_name(krd_dir, stage_rpa_name)
+        assert stage_doc is not None, f"Stage RPA '{stage_rpa_name}' not found"
+
+        rpa_components = stage_doc["spec"]["data"]["mapping"]["components"]
+        rpa_by_name = {component["name"]: component for component in rpa_components}
+
+        for cfg_comp in components:
+            expected_tags = cfg_comp.get("release_tags")
+            if expected_tags is None:
+                continue
+            comp_name = onboard_product.get_component_name(cfg_comp["name"], branch)
+            repositories = rpa_by_name[comp_name]["repositories"]
+            assert repositories[0]["tags"] == expected_tags
+
     def test_its_param_values_match_config(self, full_container_krd):
         krd_dir, data = full_container_krd
         its_configs = data["definitions"][0].get("integration_test_scenarios", [])
