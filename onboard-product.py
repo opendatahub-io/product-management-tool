@@ -431,12 +431,13 @@ def yaml_param_value(value):
     """Serialize a PipelineRun parameter as readable, valid YAML.
 
     Keep the JSON serialization used by Jinja's ``tojson`` filter for values
-    that do not need a more readable representation.  Strings containing
-    double quotes (for example, JSON-valued parameters such as
-    ``prefetch-input``) are emitted as YAML single-quoted scalars so the
-    embedded JSON quotes do not need backslash escaping.
+    that do not need a more readable representation. Strings containing
+    double quotes but no line breaks (for example, JSON-valued parameters such
+    as ``prefetch-input``) are emitted as YAML single-quoted scalars so the
+    embedded JSON quotes do not need backslash escaping. Strings with line
+    breaks use JSON serialization to keep the rendered scalar on one line.
     """
-    if isinstance(value, str) and '"' in value:
+    if isinstance(value, str) and '"' in value and "\n" not in value and "\r" not in value:
         stream = StringIO()
         _yaml_for_filter.dump(SingleQuotedScalarString(value), stream)
         return stream.getvalue().rstrip("\n")

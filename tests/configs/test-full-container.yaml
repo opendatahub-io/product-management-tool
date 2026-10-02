@@ -63,6 +63,31 @@ definitions:
                 pipeline: "3h0m0s"
                 tasks: "2h30m0s"
                 finally: "30m0s"
+              task_run_specs:
+                - task_name: build-container
+                  memory: 12Gi
+                - task_name: clair-scan
+                  compute_resources:
+                    requests:
+                      cpu: 250m
+                      memory: 12Gi
+                    limits:
+                      cpu: 750m
+                      memory: 12Gi
+                - task_name: build-source-image
+                  step_specs:
+                    - name: get-base-images
+                      compute_resources:
+                        requests:
+                          memory: 2Gi
+                        limits:
+                          memory: 4Gi
+                    - name: build
+                      compute_resources:
+                        requests:
+                          memory: 4Gi
+                        limits:
+                          memory: 8Gi
         - name: test-component-2
           context: ./test-context-2
           dockerfile: TestContainerfile-2
