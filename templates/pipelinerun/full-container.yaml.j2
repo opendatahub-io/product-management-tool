@@ -115,12 +115,37 @@ spec:
 {%- if task_run_specs %}
   taskRunSpecs:
 {%- for spec in task_run_specs %}
-  - pipelineTaskName: [[ spec.task_name ]]
+  - pipelineTaskName: [[ spec.task_name | yaml_param_value ]]
+{%- if spec.compute_resources %}
+    computeResources:
+{%- for resource_type, resource_values in spec.compute_resources.items() %}
+      [[ resource_type | yaml_param_value ]]:
+{%- for resource_name, resource_value in resource_values.items() %}
+        [[ resource_name | yaml_param_value ]]: [[ resource_value | yaml_param_value ]]
+{%- endfor %}
+{%- endfor %}
+{%- elif spec.memory %}
     computeResources:
       limits:
-        memory: [[ spec.memory ]]
+        memory: [[ spec.memory | yaml_param_value ]]
       requests:
-        memory: [[ spec.memory ]]
+        memory: [[ spec.memory | yaml_param_value ]]
+{%- endif %}
+{%- if spec.step_specs %}
+    stepSpecs:
+{%- for step_spec in spec.step_specs %}
+      - name: [[ step_spec.name | yaml_param_value ]]
+{%- if step_spec.compute_resources %}
+        computeResources:
+{%- for resource_type, resource_values in step_spec.compute_resources.items() %}
+          [[ resource_type | yaml_param_value ]]:
+{%- for resource_name, resource_value in resource_values.items() %}
+            [[ resource_name | yaml_param_value ]]: [[ resource_value | yaml_param_value ]]
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
 {%- endfor %}
 {%- endif %}
   taskRunTemplate:

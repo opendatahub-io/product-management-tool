@@ -197,6 +197,7 @@ def test_yaml_param_value(value, expected):
     "value",
     [
         'contains \' and "quotes"',
+        'contains "quotes"\nand newline',
         "line one\nline two",
         r'path\\with\\backslash"quoted',
     ],
