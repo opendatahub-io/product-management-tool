@@ -449,6 +449,33 @@ components:
               - summary=My Component Summary
               - io.openshift.tags=my tags
   ```
+- `task_run_specs` - Optional resource overrides for full-container pipeline tasks. Each entry's `task_name` maps to Tekton `pipelineTaskName`. Use either task-level resources (`memory` or `compute_resources`) or per-step `step_specs` for a task; Tekton does not allow both on the same task. The `memory` shorthand sets both `requests.memory` and `limits.memory`, while `compute_resources` accepts resource maps that render as Tekton `computeResources` and takes precedence if both task-level forms are set.
+
+  Task-level resources:
+  ```yaml
+  task_run_specs:
+    - task_name: package
+      compute_resources:
+        requests:
+          cpu: 250m
+          memory: 1Gi
+        limits:
+          cpu: 750m
+          memory: 2Gi
+  ```
+
+  Per-step resources (use instead of task-level resources for this task):
+  ```yaml
+  task_run_specs:
+    - task_name: package
+      step_specs:
+        - name: download
+          compute_resources:
+            requests:
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+  ```
 
 **ReleasePlan-level:**
 - `autorelease_annotation` - Use annotation instead of label for auto-release (default: false)

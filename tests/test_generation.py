@@ -188,6 +188,134 @@ class TestGeneration:
                 + "\\n".join(differences)
             )
 
+    def test_full_container_renders_task_and_step_resource_overrides(self):
+        """TaskRunSpecs resource maps appear on both generated events."""
+        config_file = self.test_dir / "configs/test-full-container.yaml"
+
+        config = Config()
+        with open(config_file) as f:
+            data = yaml.load(f)
+
+        render_pipelinerun_templates(
+            data, str(config["pipelinerun_template_dir"]), str(self.temp_pipelinerun)
+        )
+
+        component_dir = self.temp_pipelinerun / "test-org/test-repo/test-component/.tekton"
+        for filename in (
+            "test-component-1-on-pull-request.yaml",
+            "test-component-1-on-push.yaml",
+        ):
+            with open(component_dir / filename) as f:
+                pipelinerun = yaml.load(f)
+
+            task_run_specs = {
+                spec["pipelineTaskName"]: spec for spec in pipelinerun["spec"]["taskRunSpecs"]
+            }
+            assert task_run_specs["build-container"]["computeResources"] == {
+                "limits": {"memory": "12Gi"},
+                "requests": {"memory": "12Gi"},
+            }
+            assert task_run_specs["clair-scan"]["computeResources"] == {
+                "requests": {"cpu": "250m", "memory": "12Gi"},
+                "limits": {"cpu": "750m", "memory": "12Gi"},
+            }
+
+            step_specs = {
+                spec["name"]: spec for spec in task_run_specs["build-source-image"]["stepSpecs"]
+            }
+            assert step_specs["get-base-images"]["computeResources"] == {
+                "requests": {"memory": "2Gi"},
+                "limits": {"memory": "4Gi"},
+            }
+            assert step_specs["build"]["computeResources"] == {
+                "requests": {"memory": "4Gi"},
+                "limits": {"memory": "8Gi"},
+            }
+
+    @pytest.mark.parametrize(
+        "task_level_resources",
+        [
+            {"memory": "8Gi"},
+            {"compute_resources": {"requests": {"memory": "8Gi"}}},
+        ],
+        ids=["memory-shorthand", "compute-resources"],
+    )
+    def test_full_container_rejects_task_and_step_resource_overrides(self, task_level_resources):
+        """Task-level and step-level resource overrides cannot target one task."""
+        config_file = self.test_dir / "configs/test-full-container.yaml"
+
+        config = Config()
+        with open(config_file) as f:
+            data = yaml.load(f)
+
+        data["definitions"][0]["components"]["items"][0]["pipelinerun"][0]["task_run_specs"] = [
+            {
+                "task_name": "build-source-image",
+                **task_level_resources,
+                "step_specs": [{"name": "build"}],
+            }
+        ]
+
+        with pytest.raises(ValueError, match="cannot combine.*step_specs"):
+            render_pipelinerun_templates(
+                data, str(config["pipelinerun_template_dir"]), str(self.temp_pipelinerun)
+            )
+
+    def test_full_container_escapes_task_run_scalars(self):
+        """Task and step resource fields remain scalars with quotes and newlines."""
+        config_file = self.test_dir / "configs/test-full-container.yaml"
+
+        config = Config()
+        with open(config_file) as f:
+            data = yaml.load(f)
+
+        task_name = 'build-container "quoted"\n    taskServiceAccountName: injected'
+        memory = '12Gi "quoted"\n        cpu: 750m'
+        resource_type = 'requests "quoted"\nnext-line'
+        resource_name = 'memory "quoted"\nnext-line'
+        resource_value = '2Gi "quoted"\n        cpu: 750m'
+        resource_map = {resource_type: {resource_name: resource_value}}
+        data["definitions"][0]["components"]["items"][0]["pipelinerun"][0]["task_run_specs"] = [
+            {"task_name": task_name, "memory": memory},
+            {
+                "task_name": "clair-scan",
+                "compute_resources": resource_map,
+            },
+            {
+                "task_name": "build-source-image",
+                "step_specs": [{"name": task_name, "compute_resources": resource_map}],
+            },
+        ]
+
+        render_pipelinerun_templates(
+            data, str(config["pipelinerun_template_dir"]), str(self.temp_pipelinerun)
+        )
+
+        component_dir = self.temp_pipelinerun / "test-org/test-repo/test-component/.tekton"
+        for filename in (
+            "test-component-1-on-pull-request.yaml",
+            "test-component-1-on-push.yaml",
+        ):
+            with open(component_dir / filename) as f:
+                pipelinerun = yaml.load(f)
+
+            task_run_specs = pipelinerun["spec"]["taskRunSpecs"]
+            assert task_run_specs[0] == {
+                "pipelineTaskName": task_name,
+                "computeResources": {
+                    "limits": {"memory": memory},
+                    "requests": {"memory": memory},
+                },
+            }
+            assert task_run_specs[1] == {
+                "pipelineTaskName": "clair-scan",
+                "computeResources": resource_map,
+            }
+            assert task_run_specs[2] == {
+                "pipelineTaskName": "build-source-image",
+                "stepSpecs": [{"name": task_name, "computeResources": resource_map}],
+            }
+
     @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_end_to_end_generation(self, pipeline_type):
         """Test complete end-to-end generation (both KRD and pipelinerun)."""

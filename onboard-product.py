@@ -431,12 +431,13 @@ def yaml_param_value(value):
     """Serialize a PipelineRun parameter as readable, valid YAML.
 
     Keep the JSON serialization used by Jinja's ``tojson`` filter for values
-    that do not need a more readable representation.  Strings containing
-    double quotes (for example, JSON-valued parameters such as
-    ``prefetch-input``) are emitted as YAML single-quoted scalars so the
-    embedded JSON quotes do not need backslash escaping.
+    that do not need a more readable representation. Strings containing
+    double quotes but no line breaks (for example, JSON-valued parameters such
+    as ``prefetch-input``) are emitted as YAML single-quoted scalars so the
+    embedded JSON quotes do not need backslash escaping. Strings with line
+    breaks use JSON serialization to keep the rendered scalar on one line.
     """
-    if isinstance(value, str) and '"' in value:
+    if isinstance(value, str) and '"' in value and "\n" not in value and "\r" not in value:
         stream = StringIO()
         _yaml_for_filter.dump(SingleQuotedScalarString(value), stream)
         return stream.getvalue().rstrip("\n")
@@ -707,6 +708,15 @@ def prompt_continue_with_warnings(warnings):
         return False
 
 
+def _validate_task_run_specs(task_run_specs, component_name):
+    for spec in task_run_specs:
+        if spec.get("step_specs") and (spec.get("compute_resources") or spec.get("memory")):
+            raise ValueError(
+                f"Task '{spec.get('task_name')}' in component '{component_name}' cannot combine "
+                "task-level resources with step_specs"
+            )
+
+
 def render_pipelinerun_templates(
     data, template_dir, gitlab_repo_path, repo_overrides=None, recreate=False
 ):
@@ -801,6 +811,11 @@ def render_pipelinerun_templates(
             base_component_name = component["name"]
             component_name = get_component_name(base_component_name, branch)
             component_url = component["url"]
+            for pipelinerun_config in component.get("pipelinerun", []):
+                if pipelinerun_config.get("pipeline") == "full-container":
+                    _validate_task_run_specs(
+                        pipelinerun_config.get("task_run_specs", []), component_name
+                    )
 
             # GitHub uses /tree/, GitLab uses /-/tree/ in repo URLs
             _url_host = (urlparse(component_url).hostname or "").lower()
