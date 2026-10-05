@@ -232,6 +232,35 @@ class TestGeneration:
                 "limits": {"memory": "8Gi"},
             }
 
+    @pytest.mark.parametrize(
+        "task_level_resources",
+        [
+            {"memory": "8Gi"},
+            {"compute_resources": {"requests": {"memory": "8Gi"}}},
+        ],
+        ids=["memory-shorthand", "compute-resources"],
+    )
+    def test_full_container_rejects_task_and_step_resource_overrides(self, task_level_resources):
+        """Task-level and step-level resource overrides cannot target one task."""
+        config_file = self.test_dir / "configs/test-full-container.yaml"
+
+        config = Config()
+        with open(config_file) as f:
+            data = yaml.load(f)
+
+        data["definitions"][0]["components"]["items"][0]["pipelinerun"][0]["task_run_specs"] = [
+            {
+                "task_name": "build-source-image",
+                **task_level_resources,
+                "step_specs": [{"name": "build"}],
+            }
+        ]
+
+        with pytest.raises(ValueError, match="cannot combine.*step_specs"):
+            render_pipelinerun_templates(
+                data, str(config["pipelinerun_template_dir"]), str(self.temp_pipelinerun)
+            )
+
     def test_full_container_escapes_task_run_scalars(self):
         """Task and step resource fields remain scalars with quotes and newlines."""
         config_file = self.test_dir / "configs/test-full-container.yaml"
@@ -249,8 +278,11 @@ class TestGeneration:
         data["definitions"][0]["components"]["items"][0]["pipelinerun"][0]["task_run_specs"] = [
             {"task_name": task_name, "memory": memory},
             {
-                "task_name": "build-source-image",
+                "task_name": "clair-scan",
                 "compute_resources": resource_map,
+            },
+            {
+                "task_name": "build-source-image",
                 "step_specs": [{"name": task_name, "compute_resources": resource_map}],
             },
         ]
@@ -276,8 +308,11 @@ class TestGeneration:
                 },
             }
             assert task_run_specs[1] == {
-                "pipelineTaskName": "build-source-image",
+                "pipelineTaskName": "clair-scan",
                 "computeResources": resource_map,
+            }
+            assert task_run_specs[2] == {
+                "pipelineTaskName": "build-source-image",
                 "stepSpecs": [{"name": task_name, "computeResources": resource_map}],
             }
 

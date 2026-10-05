@@ -708,6 +708,15 @@ def prompt_continue_with_warnings(warnings):
         return False
 
 
+def _validate_task_run_specs(task_run_specs, component_name):
+    for spec in task_run_specs:
+        if spec.get("step_specs") and (spec.get("compute_resources") or spec.get("memory")):
+            raise ValueError(
+                f"Task '{spec.get('task_name')}' in component '{component_name}' cannot combine "
+                "task-level resources with step_specs"
+            )
+
+
 def render_pipelinerun_templates(
     data, template_dir, gitlab_repo_path, repo_overrides=None, recreate=False
 ):
@@ -802,6 +811,11 @@ def render_pipelinerun_templates(
             base_component_name = component["name"]
             component_name = get_component_name(base_component_name, branch)
             component_url = component["url"]
+            for pipelinerun_config in component.get("pipelinerun", []):
+                if pipelinerun_config.get("pipeline") == "full-container":
+                    _validate_task_run_specs(
+                        pipelinerun_config.get("task_run_specs", []), component_name
+                    )
 
             # GitHub uses /tree/, GitLab uses /-/tree/ in repo URLs
             _url_host = (urlparse(component_url).hostname or "").lower()
