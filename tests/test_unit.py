@@ -417,6 +417,26 @@ def test_normalize_component_config_pipelinerun_from_common_only():
     assert result[0]["pipelinerun"][0]["pipeline"] == "full-container"
 
 
+def test_select_task_run_specs_preserves_unfiltered_and_matches_variant():
+    common_spec = {"task_name": "build-container", "memory": "8Gi"}
+    cuda_spec = {"task_name": "prefetch-dependencies", "variants": ["cuda"]}
+    cpu_spec = {"task_name": "prefetch-dependencies", "variants": ["cpu"]}
+
+    assert onboard_product.select_task_run_specs(
+        [common_spec, cuda_spec, cpu_spec], "cuda"
+    ) == [common_spec, cuda_spec]
+    assert onboard_product.select_task_run_specs(
+        [common_spec, cuda_spec, cpu_spec], "cpu"
+    ) == [common_spec, cpu_spec]
+
+
+def test_select_task_run_specs_rejects_invalid_variant_selector():
+    with pytest.raises(ValueError, match="list of strings"):
+        onboard_product.select_task_run_specs(
+            [{"task_name": "prefetch-dependencies", "variants": "cuda"}], "cuda"
+        )
+
+
 def test_normalize_component_config_params_lists_combined():
     config = {
         "common": {

@@ -188,6 +188,87 @@ class TestGeneration:
                 + "\\n".join(differences)
             )
 
+    def test_variant_filtered_step_resources(self):
+        """Only matching variants receive step-level task resource overrides."""
+        repo_dir = self.temp_dir / "component-repo"
+        repo_dir.mkdir()
+        task_run_specs = [
+            {"task_name": "build-container", "memory": "8Gi"},
+            {
+                "task_name": "prefetch-dependencies",
+                "variants": ["cuda"],
+                "step_specs": [
+                    {
+                        "name": "prefetch-dependencies",
+                        "compute_resources": {
+                            "limits": {"cpu": "1", "memory": "8Gi"},
+                            "requests": {"cpu": "1", "memory": "8Gi"},
+                        },
+                    }
+                ],
+            },
+        ]
+        data = {
+            "definitions": [
+                {
+                    "application": "test-base-images",
+                    "tenant": "test-tenant",
+                    "branch": "main",
+                    "components": {
+                        "common": {
+                            "pipelinerun": {
+                                "pipeline": "full-container",
+                                "task_run_specs": task_run_specs,
+                            }
+                        },
+                        "items": [
+                            {
+                                "name": "cuda-image",
+                                "url": "https://gitlab.com/test-org/test-repo",
+                                "local_repo_path": str(repo_dir),
+                                "stage_repository": "quay.io/test-org/cuda-image",
+                                "dockerfile": "Containerfile.cuda",
+                                "pipelinerun": [
+                                    {"build_args_file": "cuda.conf", "variant": "cuda"}
+                                ],
+                            },
+                            {
+                                "name": "cpu-image",
+                                "url": "https://gitlab.com/test-org/test-repo",
+                                "local_repo_path": str(repo_dir),
+                                "stage_repository": "quay.io/test-org/cpu-image",
+                                "dockerfile": "Containerfile.cpu",
+                                "pipelinerun": [
+                                    {"build_args_file": "cpu.conf", "variant": "cpu"}
+                                ],
+                            },
+                        ],
+                    },
+                }
+            ]
+        }
+
+        render_pipelinerun_templates(
+            data,
+            str(self.test_dir.parent / "templates/pipelinerun"),
+            str(self.temp_pipelinerun),
+        )
+
+        cuda_pr = yaml.load((repo_dir / ".tekton/cuda-image-on-push.yaml").read_text())
+        cpu_pr = yaml.load((repo_dir / ".tekton/cpu-image-on-push.yaml").read_text())
+        cuda_specs = cuda_pr["spec"]["taskRunSpecs"]
+        cpu_specs = cpu_pr["spec"]["taskRunSpecs"]
+
+        assert [spec["pipelineTaskName"] for spec in cuda_specs] == [
+            "build-container",
+            "prefetch-dependencies",
+        ]
+        assert cuda_specs[1]["stepSpecs"][0]["computeResources"] == {
+            "limits": {"cpu": "1", "memory": "8Gi"},
+            "requests": {"cpu": "1", "memory": "8Gi"},
+        }
+        assert [spec["pipelineTaskName"] for spec in cpu_specs] == ["build-container"]
+
     @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_end_to_end_generation(self, pipeline_type):
         """Test complete end-to-end generation (both KRD and pipelinerun)."""

@@ -707,6 +707,29 @@ def prompt_continue_with_warnings(warnings):
         return False
 
 
+def select_task_run_specs(task_run_specs, variant):
+    """Select task-run overrides whose optional variant selector matches."""
+    selected = []
+    for spec in task_run_specs:
+        if not isinstance(spec, dict):
+            raise ValueError("Each task_run_specs entry must be a mapping")
+
+        variants = spec.get("variants")
+        if variants is None:
+            selected.append(spec)
+            continue
+
+        if not isinstance(variants, list) or not all(
+            isinstance(value, str) for value in variants
+        ):
+            raise ValueError("task_run_specs variants must be a list of strings")
+
+        if variant in variants:
+            selected.append(spec)
+
+    return selected
+
+
 def render_pipelinerun_templates(
     data, template_dir, gitlab_repo_path, repo_overrides=None, recreate=False
 ):
@@ -1010,7 +1033,9 @@ def render_pipelinerun_templates(
                                 "build_args_file": build_args_file,
                                 "variant": variant,
                                 "skip_checks": skip_checks,
-                                "task_run_specs": pipelinerun_config.get("task_run_specs", []),
+                                "task_run_specs": select_task_run_specs(
+                                    pipelinerun_config.get("task_run_specs", []), variant
+                                ),
                                 "build_args": build_args,
                                 "path_in_repo": pipelinerun_config.get(
                                     "path_in_repo", "pipelines/full-container.yaml"
