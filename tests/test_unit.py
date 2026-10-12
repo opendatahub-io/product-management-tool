@@ -417,17 +417,24 @@ def test_normalize_component_config_pipelinerun_from_common_only():
     assert result[0]["pipelinerun"][0]["pipeline"] == "full-container"
 
 
-def test_select_task_run_specs_preserves_unfiltered_and_matches_variant():
-    common_spec = {"task_name": "build-container", "memory": "8Gi"}
-    cuda_spec = {"task_name": "prefetch-dependencies", "variants": ["cuda"]}
-    cpu_spec = {"task_name": "prefetch-dependencies", "variants": ["cpu"]}
+def test_select_task_run_specs_prefers_variant_and_falls_back_to_shared():
+    common_build = {"task_name": "build-container", "memory": "8Gi"}
+    shared_prefetch = {"task_name": "prefetch-dependencies", "memory": "4Gi"}
+    cuda_prefetch = {
+        "task_name": "prefetch-dependencies",
+        "variants": ["cuda"],
+        "step_specs": [],
+    }
+    specs = [common_build, shared_prefetch, cuda_prefetch]
 
-    assert onboard_product.select_task_run_specs(
-        [common_spec, cuda_spec, cpu_spec], "cuda"
-    ) == [common_spec, cuda_spec]
-    assert onboard_product.select_task_run_specs(
-        [common_spec, cuda_spec, cpu_spec], "cpu"
-    ) == [common_spec, cpu_spec]
+    assert onboard_product.select_task_run_specs(specs, "cuda") == [
+        common_build,
+        cuda_prefetch,
+    ]
+    assert onboard_product.select_task_run_specs(specs, "cpu") == [
+        common_build,
+        shared_prefetch,
+    ]
 
 
 def test_select_task_run_specs_rejects_invalid_variant_selector():
@@ -435,6 +442,31 @@ def test_select_task_run_specs_rejects_invalid_variant_selector():
         onboard_product.select_task_run_specs(
             [{"task_name": "prefetch-dependencies", "variants": "cuda"}], "cuda"
         )
+
+
+def test_select_task_run_specs_rejects_null_variant_selector():
+    with pytest.raises(ValueError, match="list of strings"):
+        onboard_product.select_task_run_specs(
+            [{"task_name": "prefetch-dependencies", "variants": None}], "cuda"
+        )
+
+
+def test_select_task_run_specs_rejects_duplicate_shared_entries():
+    specs = [
+        {"task_name": "prefetch-dependencies", "memory": "4Gi"},
+        {"task_name": "prefetch-dependencies", "memory": "6Gi"},
+    ]
+    with pytest.raises(ValueError, match="Multiple shared task_run_specs entries"):
+        onboard_product.select_task_run_specs(specs, "cuda")
+
+
+def test_select_task_run_specs_rejects_duplicate_matching_variant_entries():
+    specs = [
+        {"task_name": "prefetch-dependencies", "variants": ["cuda"], "memory": "4Gi"},
+        {"task_name": "prefetch-dependencies", "variants": ["cuda"], "memory": "6Gi"},
+    ]
+    with pytest.raises(ValueError, match="Multiple variant-specific task_run_specs entries"):
+        onboard_product.select_task_run_specs(specs, "cuda")
 
 
 def test_normalize_component_config_params_lists_combined():

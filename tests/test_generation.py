@@ -194,6 +194,7 @@ class TestGeneration:
         repo_dir.mkdir()
         task_run_specs = [
             {"task_name": "build-container", "memory": "8Gi"},
+            {"task_name": "prefetch-dependencies", "memory": "4Gi"},
             {
                 "task_name": "prefetch-dependencies",
                 "variants": ["cuda"],
@@ -238,9 +239,7 @@ class TestGeneration:
                                 "local_repo_path": str(repo_dir),
                                 "stage_repository": "quay.io/test-org/cpu-image",
                                 "dockerfile": "Containerfile.cpu",
-                                "pipelinerun": [
-                                    {"build_args_file": "cpu.conf", "variant": "cpu"}
-                                ],
+                                "pipelinerun": [{"build_args_file": "cpu.conf", "variant": "cpu"}],
                             },
                         ],
                     },
@@ -263,11 +262,21 @@ class TestGeneration:
             "build-container",
             "prefetch-dependencies",
         ]
+        assert len(cuda_specs) == len({spec["pipelineTaskName"] for spec in cuda_specs})
+        assert "computeResources" not in cuda_specs[1]
         assert cuda_specs[1]["stepSpecs"][0]["computeResources"] == {
             "limits": {"cpu": "1", "memory": "8Gi"},
             "requests": {"cpu": "1", "memory": "8Gi"},
         }
-        assert [spec["pipelineTaskName"] for spec in cpu_specs] == ["build-container"]
+        assert [spec["pipelineTaskName"] for spec in cpu_specs] == [
+            "build-container",
+            "prefetch-dependencies",
+        ]
+        assert len(cpu_specs) == len({spec["pipelineTaskName"] for spec in cpu_specs})
+        assert cpu_specs[1]["computeResources"] == {
+            "limits": {"memory": "4Gi"},
+            "requests": {"memory": "4Gi"},
+        }
 
     @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_end_to_end_generation(self, pipeline_type):
