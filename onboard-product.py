@@ -707,6 +707,49 @@ def prompt_continue_with_warnings(warnings):
         return False
 
 
+def select_task_run_specs(task_run_specs, variant):
+    """Select variant overrides, falling back to shared settings per task."""
+    shared_specs = {}
+    variant_specs = {}
+    task_order = []
+
+    for spec in task_run_specs:
+        if not isinstance(spec, dict):
+            raise ValueError("Each task_run_specs entry must be a mapping")
+
+        task_name = spec["task_name"]
+        if task_name not in task_order:
+            task_order.append(task_name)
+
+        if "variants" not in spec:
+            target = shared_specs
+            entry_kind = "shared"
+        else:
+            variants = spec["variants"]
+            if not isinstance(variants, list) or not all(
+                isinstance(value, str) for value in variants
+            ):
+                raise ValueError("task_run_specs variants must be a list of strings")
+
+            if variant not in variants:
+                continue
+            target = variant_specs
+            entry_kind = "variant-specific"
+
+        if task_name in target:
+            raise ValueError(
+                f"Multiple {entry_kind} task_run_specs entries selected for pipeline task "
+                f"'{task_name}' and variant '{variant}'"
+            )
+        target[task_name] = spec
+
+    return [
+        variant_specs[task_name] if task_name in variant_specs else shared_specs[task_name]
+        for task_name in task_order
+        if task_name in variant_specs or task_name in shared_specs
+    ]
+
+
 def render_pipelinerun_templates(
     data, template_dir, gitlab_repo_path, repo_overrides=None, recreate=False
 ):
@@ -1010,7 +1053,9 @@ def render_pipelinerun_templates(
                                 "build_args_file": build_args_file,
                                 "variant": variant,
                                 "skip_checks": skip_checks,
-                                "task_run_specs": pipelinerun_config.get("task_run_specs", []),
+                                "task_run_specs": select_task_run_specs(
+                                    pipelinerun_config.get("task_run_specs", []), variant
+                                ),
                                 "build_args": build_args,
                                 "path_in_repo": pipelinerun_config.get(
                                     "path_in_repo", "pipelines/full-container.yaml"

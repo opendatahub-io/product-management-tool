@@ -116,11 +116,23 @@ spec:
   taskRunSpecs:
 {%- for spec in task_run_specs %}
   - pipelineTaskName: [[ spec.task_name ]]
+{%- if spec.memory %}
     computeResources:
       limits:
         memory: [[ spec.memory ]]
       requests:
         memory: [[ spec.memory ]]
+{%- endif %}
+{%- if spec.step_specs %}
+    stepSpecs:
+{%- for step in spec.step_specs %}
+    - name: [[ step.name ]]
+{%- if step.compute_resources %}
+      computeResources:
+[[ step.compute_resources | to_yaml(8) ]]
+{%- endif %}
+{%- endfor %}
+{%- endif %}
 {%- endfor %}
 {%- endif %}
   taskRunTemplate:
