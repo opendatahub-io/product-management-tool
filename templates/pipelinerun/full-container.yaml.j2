@@ -20,7 +20,13 @@ metadata:
 {%- if pipelinerun_type == "pull" %}
       event == "pull_request" && target_branch == "[[ branch ]]" && (
           ".tekton/[[ base_component_name ]]-on-pull-request.yaml".pathChanged() ||
+{%- if build_args_file is string %}
           "[[ build_args_file ]]".pathChanged() ||
+{%- else %}
+{%- for f in build_args_file %}
+          "[[ f ]]".pathChanged() ||
+{%- endfor %}
+{%- endif %}
           "[[ component_dockerfile ]]".pathChanged()[[ " ||" if cel_path_changed else "" ]]
 {%- for path in cel_path_changed %}
           "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
@@ -36,7 +42,13 @@ metadata:
 {%- else %}
       event == "push" && target_branch == "[[ branch ]]" && (
           ".tekton/[[ base_component_name ]]-on-push.yaml".pathChanged() ||
+{%- if build_args_file is string %}
           "[[ build_args_file ]]".pathChanged() ||
+{%- else %}
+{%- for f in build_args_file %}
+          "[[ f ]]".pathChanged() ||
+{%- endfor %}
+{%- endif %}
           "[[ component_dockerfile ]]".pathChanged()[[ " ||" if cel_path_changed else "" ]]
 {%- for path in cel_path_changed %}
           "[[ path ]]".pathChanged()[[ " ||" if not loop.last else "" ]]
@@ -72,8 +84,16 @@ spec:
     value: [[ component_dockerfile ]]
   - name: path-context
     value: [[ path_context ]]
+{%- if build_args_file is string %}
   - name: build-args-file
     value: [[ build_args_file ]]
+{%- else %}
+  - name: build-args-file
+    value:
+{%- for f in build_args_file %}
+    - [[ f ]]
+{%- endfor %}
+{%- endif %}
 {%- if build_args %}
   - name: build-args
     value:
