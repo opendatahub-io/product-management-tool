@@ -1,0 +1,20 @@
+# Test config for a build-only product: components with no release plans
+# and no RPAs. Verifies that generation does not create an empty
+# releaseplans directory (git does not track empty dirs, so the version
+# kustomization would carry a dangling reference and kustomize builds
+# would fail after commit).
+definitions:
+  - application: test-build-only
+    tenant: test-tenant
+    branch: main
+    components:
+      common:
+        pipelinerun:
+          pipeline: full-container
+      items:
+        - name: test-build-only-comp
+          context: .
+          dockerfile: Containerfile
+          url: https://gitlab.com/test-org/test-repo/test-component
+          pipelinerun:
+            - build_args_file: build.conf
