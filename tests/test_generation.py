@@ -278,6 +278,43 @@ class TestGeneration:
             "requests": {"memory": "4Gi"},
         }
 
+    @pytest.mark.parametrize(
+        "workspaces",
+        [
+            [],
+            [
+                {"name": "netrc", "secret_name": "rhaiis-private-netrc"},
+                {"name": "true", "secret_name": "null"},
+            ],
+        ],
+    )
+    def test_pipelinerun_secret_workspaces(self, workspaces):
+        """Append typed secret bindings after git-auth in both event pipelines."""
+        data = yaml.load(self.test_dir / "configs/test-full-container.yaml")
+        definition = data["definitions"][0]
+        definition["branch"] = "main"
+        component = definition["components"]["items"][1]
+        definition["components"]["items"] = [component]
+        repo_dir = self.temp_dir / "component-repo"
+        component["local_repo_path"] = str(repo_dir)
+        component["pipelinerun"][0]["workspaces"] = workspaces
+
+        render_pipelinerun_templates(
+            data,
+            str(self.test_dir.parent / "templates/pipelinerun"),
+            str(self.temp_pipelinerun),
+        )
+
+        for event in ["pull-request", "push"]:
+            pr = yaml.load(repo_dir / f".tekton/{component['name']}-on-{event}.yaml")
+            assert pr["spec"]["workspaces"] == [
+                {"name": "git-auth", "secret": {"secretName": "{{ git_auth_secret }}"}},
+                *[
+                    {"name": binding["name"], "secret": {"secretName": binding["secret_name"]}}
+                    for binding in workspaces
+                ],
+            ]
+
     @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_end_to_end_generation(self, pipeline_type):
         """Test complete end-to-end generation (both KRD and pipelinerun)."""

@@ -469,6 +469,28 @@ def test_select_task_run_specs_rejects_duplicate_matching_variant_entries():
         onboard_product.select_task_run_specs(specs, "cuda")
 
 
+def test_normalize_pipelinerun_workspaces_defaults_to_empty():
+    assert onboard_product.normalize_pipelinerun_workspaces(None) == []
+    assert onboard_product.normalize_pipelinerun_workspaces([]) == []
+
+
+@pytest.mark.parametrize(
+    "value, message",
+    [
+        ({}, "must be a list"),
+        (False, "must be a list"),
+        (["netrc"], "must be a mapping"),
+        ([{"secret_name": "index-auth"}], "nonempty 'name'"),
+        ([{"name": "netrc", "secret_name": ""}], "nonempty 'secret_name'"),
+        ([{"name": "git-auth", "secret_name": "index-auth"}], "reserved"),
+        ([{"name": "netrc", "secret_name": "index-auth"}] * 2, "Duplicate"),
+    ],
+)
+def test_normalize_pipelinerun_workspaces_rejects_invalid_bindings(value, message):
+    with pytest.raises(ValueError, match=message):
+        onboard_product.normalize_pipelinerun_workspaces(value)
+
+
 def test_normalize_component_config_params_lists_combined():
     config = {
         "common": {

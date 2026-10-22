@@ -141,3 +141,8 @@ spec:
   - name: git-auth
     secret:
       secretName: "{{ git_auth_secret }}"
+{%- for workspace in workspaces %}
+  - name: [[ workspace.name | yaml_param_value ]]
+    secret:
+      secretName: [[ workspace.secret_name | yaml_param_value ]]
+{%- endfor %}

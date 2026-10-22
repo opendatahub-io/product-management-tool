@@ -450,6 +450,13 @@ components:
               - summary=My Component Summary
               - io.openshift.tags=my tags
   ```
+- `workspaces` - Additional secret-backed workspace bindings appended after the generated `git-auth` workspace (full-container only). Each entry uses `name` and `secret_name`. Absent or empty keeps the generated output unchanged; `git-auth` is reserved and duplicate names are rejected.
+  ```yaml
+  pipelinerun:
+    - workspaces:
+        - name: netrc
+          secret_name: rhaiis-private-netrc
+  ```
 
 **ReleasePlan-level:**
 - `autorelease_annotation` - Use annotation instead of label for auto-release (default: false)
