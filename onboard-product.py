@@ -100,6 +100,49 @@ def prefix_repo_path(prefix, path):
     return f"{prefix}/{path.removeprefix('./')}"
 
 
+def _looks_remote(resource):
+    """
+    Heuristic for kustomize remote resource references.
+
+    Kustomize accepts URLs (https://...), SSH git remotes
+    (git@github.com:owner/repo), and legacy bare host/path forms
+    (github.com/owner/repo) as resources. Local entries in generated
+    kustomizations are plain relative paths, so anything with a scheme
+    separator, a colon, an at-sign, or a dotted first segment followed
+    by a path is treated as remote. When unsure, err on the side of
+    remote: keeping an entry is harmless, dropping a valid one is not.
+    """
+    resource = str(resource).strip()
+    if "://" in resource or ":" in resource or "@" in resource:
+        return True
+    stripped = resource.lstrip("./")
+    first = stripped.split("/")[0]
+    return "/" in stripped and "." in first
+
+
+def _kustomize_resource_valid(directory, resource):
+    """
+    Check that a kustomize resource entry is buildable.
+
+    Local entries must point at a file or at a directory containing a
+    kustomization file; kustomize rejects anything else (an empty
+    releaseplans directory left by an earlier run is not retained by
+    git, so keeping its entry produces a dangling reference). Remote
+    references (URL, SSH git remote, legacy host/path) are assumed
+    valid because they cannot be verified locally.
+    """
+    resource = str(resource)
+    if _looks_remote(resource):
+        return True
+    path = os.path.join(directory, resource)
+    if os.path.isfile(path):
+        return True
+    return os.path.isdir(path) and any(
+        os.path.isfile(os.path.join(path, name))
+        for name in ("kustomization.yaml", "kustomization.yml", "Kustomization")
+    )
+
+
 def create_kustomization(directory, files, tenant):
     """
     Create or update a kustomization.yaml file in the specified directory.
@@ -119,6 +162,12 @@ def create_kustomization(directory, files, tenant):
             existing_content = yaml.load(f)
 
         existing_resources = existing_content.get("resources", [])
+        # Drop entries that kustomize cannot build (missing local path,
+        # directory without a kustomization file) so the merge does not
+        # preserve stale references. Remote entries are kept.
+        existing_resources = [
+            r for r in existing_resources if _kustomize_resource_valid(directory, r)
+        ]
         all_resources = list(set(existing_resources + files))
 
         kustomization_content = existing_content
@@ -149,14 +198,22 @@ def ensure_dirs(*paths):
 
 
 def get_directory_resources(directory):
-    """Get all files and directories in a directory for kustomization resources."""
+    """Get valid kustomize resources in a directory.
+
+    Returns files and directories that kustomize can build: existing
+    files and directories containing a kustomization file. A directory
+    without one (e.g. an empty releaseplans left by an earlier run) is
+    skipped, and the caller's kustomization is never a resource of
+    itself.
+    """
     if not os.path.exists(directory):
         return []
 
     resources = []
     for item in os.listdir(directory):
-        os.path.join(directory, item)
-        if not item.startswith(".") and item != "kustomization.yaml":
+        if item.startswith(".") or item == "kustomization.yaml":
+            continue
+        if _kustomize_resource_valid(directory, item):
             resources.append(item)
 
     return sorted(resources)
@@ -1332,7 +1389,11 @@ def render_krd_templates(
         imagerepos_dir = os.path.join(base_path, "imagerepositories")
         releaseplans_dir = os.path.join(base_path, "releaseplans")
         integrationtests_dir = os.path.join(base_path, "integrationtests")
-        ensure_dirs(apps_dir, components_dir, imagerepos_dir, releaseplans_dir)
+        # releaseplans_dir is created on demand when the first release plan
+        # is written: git does not track empty directories, so creating it
+        # unconditionally leaves a dangling reference in the version
+        # kustomization for build-only products (no release plans).
+        ensure_dirs(apps_dir, components_dir, imagerepos_dir)
 
         app_template = env.get_template("application.yaml.j2")
         app_content = app_template.render(application_name=versioned_app_name)
@@ -1478,6 +1539,7 @@ def render_krd_templates(
                 final_pipeline=final_pipeline,
             )
             rp_filename = f"{rp_name}.yaml"
+            ensure_dirs(releaseplans_dir)
             write_with_newline(os.path.join(releaseplans_dir, rp_filename), rp_content)
             releaseplan_files.append(rp_filename)
 
