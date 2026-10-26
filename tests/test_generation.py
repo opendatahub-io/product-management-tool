@@ -188,6 +188,144 @@ class TestGeneration:
                 + "\\n".join(differences)
             )
 
+    def test_build_only_product_no_releaseplans_dir(self):
+        """Build-only products (no release plans) generate no releaseplans
+        directory and no dangling reference in the version kustomization."""
+        config_file = self.test_dir / "configs/test-build-only-container.yaml"
+        config = Config()
+
+        with open(config_file) as f:
+            data = yaml.load(f)
+
+        render_krd_templates(
+            data,
+            str(config["krd_template_dir"]),
+            str(self.temp_krd),
+            config["cluster"],
+            recreate=False,
+        )
+
+        version_dir = (
+            self.temp_krd
+            / "tenants-config"
+            / "cluster"
+            / config["cluster"]
+            / "tenants"
+            / "test-tenant"
+            / "test-build-only"
+            / "main"
+        )
+        assert (version_dir / "components/test-build-only-comp.yaml").exists()
+        assert not (version_dir / "releaseplans").exists()
+
+        kustomization = yaml.load((version_dir / "kustomization.yaml").read_text())
+        assert "releaseplans" not in kustomization.get("resources", [])
+
+    def test_build_only_regeneration_removes_stale_releaseplans_ref(self):
+        """Regenerating over output whose version kustomization lists
+        releaseplans without the directory (git drops empty dirs) removes
+        the stale reference instead of preserving it in the merge."""
+        config_file = self.test_dir / "configs/test-build-only-container.yaml"
+        config = Config()
+
+        with open(config_file) as f:
+            data = yaml.load(f)
+
+        version_dir = (
+            self.temp_krd
+            / "tenants-config"
+            / "cluster"
+            / config["cluster"]
+            / "tenants"
+            / "test-tenant"
+            / "test-build-only"
+            / "main"
+        )
+        version_dir.mkdir(parents=True)
+        # Simulate output from a previous run: releaseplans listed, but the
+        # directory itself was never committed (git drops empty dirs).
+        (version_dir / "kustomization.yaml").write_text(
+            "apiVersion: kustomize.config.k8s.io/v1beta1\n"
+            "kind: Kustomization\n"
+            "namespace: test-tenant\n"
+            "resources:\n"
+            "  - applications\n"
+            "  - components\n"
+            "  - imagerepositories\n"
+            "  - releaseplans\n"
+        )
+
+        render_krd_templates(
+            data,
+            str(config["krd_template_dir"]),
+            str(self.temp_krd),
+            config["cluster"],
+            recreate=False,
+        )
+
+        kustomization = yaml.load((version_dir / "kustomization.yaml").read_text())
+        resources = kustomization.get("resources", [])
+        assert "releaseplans" not in resources
+        assert "applications" in resources
+        assert "components" in resources
+        assert "imagerepositories" in resources
+
+    def test_build_only_regeneration_empty_dir_and_remote_ref(self):
+        """An empty leftover releaseplans directory is pruned (git would
+        not retain it, so keeping the entry dangles after commit), while
+        remote resource entries are preserved (they cannot be verified
+        locally)."""
+        config_file = self.test_dir / "configs/test-build-only-container.yaml"
+        config = Config()
+
+        with open(config_file) as f:
+            data = yaml.load(f)
+
+        version_dir = (
+            self.temp_krd
+            / "tenants-config"
+            / "cluster"
+            / config["cluster"]
+            / "tenants"
+            / "test-tenant"
+            / "test-build-only"
+            / "main"
+        )
+        version_dir.mkdir(parents=True)
+        # Empty releaseplans directory left by an earlier run.
+        (version_dir / "releaseplans").mkdir()
+        (version_dir / "kustomization.yaml").write_text(
+            "apiVersion: kustomize.config.k8s.io/v1beta1\n"
+            "kind: Kustomization\n"
+            "namespace: test-tenant\n"
+            "resources:\n"
+            "  - applications\n"
+            "  - components\n"
+            "  - imagerepositories\n"
+            "  - releaseplans\n"
+            "  - missing-file.yaml\n"
+            "  - https://example.com/kustomization/base\n"
+            "  - git@github.com:test-org/test-repo//base?ref=main\n"
+            "  - github.com/test-org/test-repo/base\n"
+        )
+
+        render_krd_templates(
+            data,
+            str(config["krd_template_dir"]),
+            str(self.temp_krd),
+            config["cluster"],
+            recreate=False,
+        )
+
+        kustomization = yaml.load((version_dir / "kustomization.yaml").read_text())
+        resources = kustomization.get("resources", [])
+        assert "releaseplans" not in resources
+        assert "missing-file.yaml" not in resources
+        assert "https://example.com/kustomization/base" in resources
+        assert "git@github.com:test-org/test-repo//base?ref=main" in resources
+        assert "github.com/test-org/test-repo/base" in resources
+        assert "applications" in resources
+
     def test_variant_filtered_step_resources(self):
         """Only matching variants receive step-level task resource overrides."""
         repo_dir = self.temp_dir / "component-repo"
@@ -383,14 +521,15 @@ class TestMultiConfig:
         config_files = onboard_product.collect_config_files(["tests/configs/test-*.yaml"], None)
 
         # Should find test-full-container.yaml, test-disk-image.yaml, test-developer-portal.yaml,
-        # test-marketplace.yaml, and test-stage-only-container.yaml
-        assert len(config_files) == 5
+        # test-marketplace.yaml, test-stage-only-container.yaml, and test-build-only-container.yaml
+        assert len(config_files) == 6
         assert all(isinstance(cf, Path) for cf in config_files)
         assert any("test-full-container.yaml" in str(cf) for cf in config_files)
         assert any("test-disk-image.yaml" in str(cf) for cf in config_files)
         assert any("test-developer-portal.yaml" in str(cf) for cf in config_files)
         assert any("test-marketplace.yaml" in str(cf) for cf in config_files)
         assert any("test-stage-only-container.yaml" in str(cf) for cf in config_files)
+        assert any("test-build-only-container.yaml" in str(cf) for cf in config_files)
 
     def test_collect_config_files_config_dir(self):
         """Test collecting config files using --config-dir."""
