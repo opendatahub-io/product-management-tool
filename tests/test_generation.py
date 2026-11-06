@@ -453,6 +453,35 @@ class TestGeneration:
                 ],
             ]
 
+    @pytest.mark.parametrize("image_expires_after_push", ["", "1w"])
+    def test_image_expires_after_on_push(self, image_expires_after_push):
+        """Push pipelines emit image-expires-after only when configured; pull keeps its default."""
+        data = yaml.load(self.test_dir / "configs/test-full-container.yaml")
+        definition = data["definitions"][0]
+        definition["branch"] = "main"
+        component = definition["components"]["items"][1]
+        definition["components"]["items"] = [component]
+        repo_dir = self.temp_dir / "component-repo"
+        component["local_repo_path"] = str(repo_dir)
+        if image_expires_after_push:
+            component["pipelinerun"][0]["image_expires_after_push"] = image_expires_after_push
+
+        render_pipelinerun_templates(
+            data,
+            str(self.test_dir.parent / "templates/pipelinerun"),
+            str(self.temp_pipelinerun),
+        )
+
+        def params(event):
+            pr = yaml.load(repo_dir / f".tekton/{component['name']}-on-{event}.yaml")
+            return {param["name"]: param["value"] for param in pr["spec"]["params"]}
+
+        assert params("pull-request")["image-expires-after"] == "5d"
+        if image_expires_after_push:
+            assert params("push")["image-expires-after"] == image_expires_after_push
+        else:
+            assert "image-expires-after" not in params("push")
+
     @pytest.mark.parametrize("pipeline_type", ["full-container", "disk-image", "marketplace"])
     def test_end_to_end_generation(self, pipeline_type):
         """Test complete end-to-end generation (both KRD and pipelinerun)."""
