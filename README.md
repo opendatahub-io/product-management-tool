@@ -434,6 +434,8 @@ components:
 
 **Pipelinerun-level:**
 - `squash-build` - Squash build layers (optional, default: not set)
+- `image_expires_after` - Quay tag expiry (`1h`, `2d`, `3w`) for pull-request pipelineruns (default: `5d`)
+- `image_expires_after_push` - Quay tag expiry for push pipelineruns (optional, default: not set)
 - `use_build_args` - Move name/component labels into build-args instead of pipelinerun labels (default: false)
 - `task_run_specs` - Tekton task resource overrides. Each entry uses `task_name`; the existing `memory` shorthand remains supported. Optional `variants` limits an override to matching build variants, and `step_specs` emits step-level `compute_resources`.
 - `labels` - Additional labels to inject into pipelinerun files as `key=value` strings. Can be specified at the common pipelinerun level (shared across all components) or per-component pipelinerun level. Per-component labels override common labels when they share the same key. Config-defined labels also override auto-generated labels (`name`, `com.redhat.component`, `cpe`) on key collision.

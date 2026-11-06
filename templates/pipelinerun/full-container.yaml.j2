@@ -67,6 +67,9 @@ spec:
 {%- if pipelinerun_type == "pull" %}
   - name: image-expires-after
     value: [[ image_expires_after ]]
+{%- elif image_expires_after_push %}
+  - name: image-expires-after
+    value: [[ image_expires_after_push ]]
 {%- endif %}
   - name: dockerfile
     value: [[ component_dockerfile ]]

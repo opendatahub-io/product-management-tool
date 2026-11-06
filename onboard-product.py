@@ -992,6 +992,7 @@ def render_pipelinerun_templates(
                 cel_push_tag_prefixes = pipelinerun_config.get("cel_push_tag_prefixes", [])
                 build_nudge_files = pipelinerun_config.get("build_nudge_files", "")
                 image_expires_after = pipelinerun_config.get("image_expires_after", "5d")
+                image_expires_after_push = pipelinerun_config.get("image_expires_after_push", "")
                 path_context = pipelinerun_config.get("path_context", "./context/")
 
                 raw_context = component.get("context", component.get("contenxt", "."))
@@ -1130,6 +1131,7 @@ def render_pipelinerun_templates(
                         "cel_push_tag_prefixes": cel_push_tag_prefixes,
                         "build_nudge_files": build_nudge_files,
                         "image_expires_after": image_expires_after,
+                        "image_expires_after_push": image_expires_after_push,
                         "labels": pipelinerun_labels,
                         "extra_params": pipelinerun_config.get("params", []),
                     }
