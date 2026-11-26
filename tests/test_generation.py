@@ -1748,13 +1748,16 @@ class TestRPAValidation:
         self._render(data)
         rp = self._read_release_plan("test-stage")
         final_pipeline = rp["spec"]["finalPipeline"]
-        assert final_pipeline["taskRunSpecs"] == [
+        task_run_specs = final_pipeline["taskRunSpecs"]
+        assert task_run_specs == [
             {
                 "pipelineTaskName": "scan",
                 "serviceAccountName": "build-pipeline-base-image-cpu-3-5",
             }
         ]
         assert "params" not in final_pipeline
+        # KRD lint requires the list dash to be indented under its parent key.
+        assert task_run_specs.lc.item(0)[1] == final_pipeline.lc.key("taskRunSpecs")[1] + 4
 
     def test_release_plan_with_final_pipeline_timeouts(self):
         """Optional finalPipeline.timeouts are rendered as a native Tekton timeouts

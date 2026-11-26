@@ -40,7 +40,7 @@ spec:
 {%- endif %}
 {%- if final_pipeline.task_run_specs %}
     taskRunSpecs:
-[[ final_pipeline.task_run_specs | to_yaml(4) ]]
+[[ final_pipeline.task_run_specs | to_yaml(6) ]]
 {%- endif %}
 {%- if final_pipeline.timeouts %}
     timeouts:
