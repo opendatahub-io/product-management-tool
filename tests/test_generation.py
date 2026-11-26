@@ -1681,6 +1681,8 @@ class TestRPAValidation:
             "pathInRepo": "pipelines/copy-clair-scan-results.yaml",
         }
         assert "params" not in final_pipeline
+        assert "taskRunSpecs" not in final_pipeline
+        assert "timeouts" not in final_pipeline
 
     def test_release_plan_with_final_pipeline_params_renders_extra_params(self):
         """Optional finalPipeline.params entries are rendered when provided."""
@@ -1711,6 +1713,81 @@ class TestRPAValidation:
         rp = self._read_release_plan("test-stage")
         final_pipeline = rp["spec"]["finalPipeline"]
         assert final_pipeline["params"] == [{"name": "foo", "value": "bar"}]
+
+    def test_release_plan_with_final_pipeline_task_run_specs(self):
+        """Optional finalPipeline.task_run_specs are rendered as native Tekton
+        taskRunSpecs entries, not as pipeline params."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+            release_plan_extra={
+                "final_pipeline": {
+                    "url": "https://github.com/aipcc-cicd/konflux-data",
+                    "revision": "main",
+                    "path_in_repo": "pipelines/copy-clair-scan-results.yaml",
+                    "service_account_name": "finalpipeline-sa",
+                    "task_run_specs": [
+                        {
+                            "pipelineTaskName": "scan",
+                            "serviceAccountName": "build-pipeline-base-image-cpu-3-5",
+                        }
+                    ],
+                }
+            },
+        )
+        self._render(data)
+        rp = self._read_release_plan("test-stage")
+        final_pipeline = rp["spec"]["finalPipeline"]
+        task_run_specs = final_pipeline["taskRunSpecs"]
+        assert task_run_specs == [
+            {
+                "pipelineTaskName": "scan",
+                "serviceAccountName": "build-pipeline-base-image-cpu-3-5",
+            }
+        ]
+        assert "params" not in final_pipeline
+        # KRD lint requires the list dash to be indented under its parent key.
+        assert task_run_specs.lc.item(0)[1] == final_pipeline.lc.key("taskRunSpecs")[1] + 4
+
+    def test_release_plan_with_final_pipeline_timeouts(self):
+        """Optional finalPipeline.timeouts are rendered as a native Tekton timeouts
+        mapping, keeping the duration value a string."""
+        data = self._make_data(
+            components=[{"name": "comp", "pipelinerun": [{"pipeline": "full-container"}]}],
+            rpas=[
+                {
+                    "name": "test-stage",
+                    "policy": "pol",
+                    "service_account": "sa",
+                    "pipeline_path": "p.yaml",
+                    "intention": "staging",
+                    "product_name": "P",
+                    "product_version": "1.0",
+                }
+            ],
+            release_plan_extra={
+                "final_pipeline": {
+                    "url": "https://github.com/aipcc-cicd/konflux-data",
+                    "revision": "main",
+                    "path_in_repo": "pipelines/copy-clair-scan-results.yaml",
+                    "service_account_name": "finalpipeline-sa",
+                    "timeouts": {"pipeline": "2h20m"},
+                }
+            },
+        )
+        self._render(data)
+        rp = self._read_release_plan("test-stage")
+        assert rp["spec"]["finalPipeline"]["timeouts"] == {"pipeline": "2h20m"}
 
     def test_release_plan_with_partial_final_pipeline_raises(self):
         """A final_pipeline dict missing required sub-fields fails loudly instead of
