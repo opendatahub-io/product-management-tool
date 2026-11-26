@@ -479,7 +479,16 @@ components:
         params:                        # OPTIONAL - additional pipeline params
           - name: some-param
             value: some-value
+        task_run_specs:                # OPTIONAL - native Tekton taskRunSpecs entries
+          - pipelineTaskName: scan
+            serviceAccountName: build-pipeline-base-image-cpu-3-5
+        timeouts:                      # OPTIONAL - native Tekton PipelineRun timeouts
+          pipeline: 2h20m
   ```
+  `task_run_specs` and `timeouts` are rendered as controller settings under `spec.finalPipeline`
+  (`taskRunSpecs` and `timeouts`), not as pipeline params. Entries are copied as written, so any
+  valid Tekton `TaskRunSpec` field or `timeouts` key works; when omitted, the generated ReleasePlan
+  is unchanged.
 
 **ReleasePlanAdmission-level:**
 - `single_component_mode` - Individual vs bundled releases (default: false)

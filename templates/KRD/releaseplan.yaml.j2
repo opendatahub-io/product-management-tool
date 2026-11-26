@@ -38,4 +38,12 @@ spec:
         value: "[[ param.value ]]"
 {%- endfor %}
 {%- endif %}
+{%- if final_pipeline.task_run_specs %}
+    taskRunSpecs:
+[[ final_pipeline.task_run_specs | to_yaml(4) ]]
+{%- endif %}
+{%- if final_pipeline.timeouts %}
+    timeouts:
+[[ final_pipeline.timeouts | to_yaml(6) ]]
+{%- endif %}
 {%- endif %}
