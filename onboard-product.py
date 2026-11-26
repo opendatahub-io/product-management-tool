@@ -629,19 +629,30 @@ def resolve_repo_path(component, gitlab_repo_path, repo_overrides):
     return os.path.join(gitlab_repo_path, org, repo)
 
 
-def check_repo_health(path, name, expected_branch=None, strict=True):
+def check_repo_health(
+    path,
+    name,
+    expected_branch=None,
+    strict=True,
+    branch_mismatch_is_error=False,
+    check_dirty=False,
+):
     """
     Check if a git repository is healthy.
 
     Returns (errors, warnings):
-      errors  — blocking issues that must be fixed (missing path if strict, not a git repo)
-      warnings — soft issues the user can override (behind remote, missing path if not strict)
+      errors  — blocking issues that must be fixed (missing path if strict, not a git repo,
+                branch mismatch when branch_mismatch_is_error is True)
+      warnings — soft issues the user can override (behind remote, missing path if not strict,
+                 branch mismatch by default, dirty working tree when check_dirty is True)
 
     Args:
         path: Path to the repository root
         name: Human-readable name for messages
-        expected_branch: If set, warn when the repo is on a different branch
+        expected_branch: If set, report when the repo is on a different branch
         strict: If True, missing path / not-a-git-repo go into errors; if False, into warnings
+        branch_mismatch_is_error: If True, a branch mismatch is a blocking error instead of a warning
+        check_dirty: If True, warn when the working tree has uncommitted changes (including untracked files)
     """
     errors = []
     warnings = []
@@ -657,15 +668,32 @@ def check_repo_health(path, name, expected_branch=None, strict=True):
         (errors if strict else warnings).append(msg)
         return errors, warnings
 
+    if check_dirty:
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            errors.append(f"{name}: git status failed: {result.stderr.strip()}")
+        else:
+            dirty_lines = [line for line in result.stdout.splitlines() if line.strip()]
+            if dirty_lines:
+                warnings.append(
+                    f"{name}: working tree is dirty ({len(dirty_lines)} uncommitted change(s))"
+                )
+
     result = subprocess.run(
         ["git", "branch", "--show-current"], cwd=path, capture_output=True, text=True
     )
     current_branch = result.stdout.strip()
     if expected_branch and current_branch != expected_branch:
-        warnings.append(
-            f"{name}: on branch '{current_branch}', expected '{expected_branch}'"
-            f" — make sure this will be merged to '{expected_branch}'"
-        )
+        msg = f"{name}: on branch '{current_branch or '(detached)'}', expected '{expected_branch}'"
+        if branch_mismatch_is_error:
+            errors.append(msg)
+        else:
+            warnings.append(msg + f" — make sure this will be merged to '{expected_branch}'")
 
     try:
         print("    Fetching remote...", end="", flush=True)
@@ -694,8 +722,10 @@ def collect_repo_warnings(data, config, mode):
     Collect git repository health issues for all paths that will be written to.
 
     Returns (errors, warnings):
-      errors  — blocking issues (KRD path missing/not-git)
-      warnings — soft issues the user can override (behind remote, component path missing)
+      errors  — blocking issues (KRD path missing/not-git, KRD branch mismatch
+                when krd_branch is set)
+      warnings — soft issues the user can override (behind remote, dirty KRD
+                 working tree, component path missing, component branch mismatch)
     """
     all_errors = []
     all_warnings = []
@@ -704,7 +734,14 @@ def collect_repo_warnings(data, config, mode):
 
     if mode in ["krd", "both"]:
         print(f"  Checking KRD repository: {config['krd_path']}")
-        errors, warnings = check_repo_health(str(config["krd_path"]), "KRD repository", strict=True)
+        errors, warnings = check_repo_health(
+            str(config["krd_path"]),
+            "KRD repository",
+            expected_branch=config.get("krd_branch"),
+            strict=True,
+            branch_mismatch_is_error=True,
+            check_dirty=True,
+        )
         all_errors.extend(errors)
         all_warnings.extend(warnings)
 
@@ -744,16 +781,18 @@ def prompt_continue_with_warnings(warnings):
     """
     Print soft repository warnings and ask the user whether to continue.
 
-    In non-interactive mode (e.g. CI), warnings are printed but execution
-    continues automatically. Returns True to continue, False to abort.
+    In non-interactive mode (e.g. CI), warnings abort the run. Returns True
+    to continue, False to abort.
     """
-    print("\nRepository warnings (non-blocking):")
+    print("\nRepository warnings:")
     for w in warnings:
         print(f"  ! {w}")
 
     if not sys.stdin.isatty():
-        print("\nNon-interactive mode: continuing despite warnings.")
-        return True
+        print(
+            "\nNon-interactive mode: aborting due to warnings (use --skip-repo-checks to override)."
+        )
+        return False
 
     print()
     try:
@@ -1868,6 +1907,13 @@ def render_krd_templates(
     return tenants_config_written
 
 
+def non_empty_str(value):
+    """Argparse type that rejects empty or whitespace-only strings."""
+    if not value.strip():
+        raise argparse.ArgumentTypeError("must not be empty")
+    return value
+
+
 def main():
     """
     Main entry point for the product onboarding script.
@@ -1886,6 +1932,7 @@ def main():
         --mode: Generation mode (krd, pipelinerun, or both) - defaults to 'both'
         --settings: Path to TOML settings file (default: ./.onboard-config.toml)
         --krd-path: Output path for KRD resources (default: ./output/krd)
+        --krd-branch: Expected checked-out branch in the KRD repository (mismatch aborts)
         --gitlab-path: Output path for pipelinerun resources (default: ./output/pipelinerun)
         --templates-dir: KRD templates directory (default: ./templates/KRD)
         --pipelinerun-templates-dir: Pipelinerun templates directory (default: ./templates/pipelinerun)
@@ -1898,6 +1945,7 @@ def main():
         CLUSTER: Target Kubernetes cluster name
         PIPELINERUN_TEMPLATE_DIR: Pipelinerun templates directory
         GITLAB_REPO_PATH: Base path for GitLab repository checkouts
+        KRD_BRANCH: Expected checked-out branch in the KRD repository
     """
     parser = argparse.ArgumentParser(
         description="Generate KRD and pipelinerun resources for Konflux platform",
@@ -1940,6 +1988,13 @@ def main():
         type=Path,
         dest="krd_path",
         help="Output path for KRD resources (default: ./output/krd)",
+    )
+
+    parser.add_argument(
+        "--krd-branch",
+        type=non_empty_str,
+        dest="krd_branch",
+        help="Expected checked-out branch in the KRD repository; a mismatch aborts the run",
     )
 
     parser.add_argument(
@@ -2016,6 +2071,7 @@ def main():
             "krd_template_dir": args.krd_template_dir,
             "pipelinerun_template_dir": args.pipelinerun_template_dir,
             "cluster": args.cluster,
+            "krd_branch": args.krd_branch,
         },
     )
 
@@ -2066,7 +2122,7 @@ def main():
 
         if repo_warnings and not prompt_continue_with_warnings(repo_warnings):
             print("Aborted.")
-            sys.exit(0)
+            sys.exit(1 if not sys.stdin.isatty() else 0)
 
     # Generate resources based on mode
     tenants_config_written = False

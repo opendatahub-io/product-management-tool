@@ -702,6 +702,73 @@ def test_config_env_overrides_toml(tmp_path, monkeypatch):
     assert str(c["krd_path"]) == "/env/path"
 
 
+def test_config_krd_branch_default_none(monkeypatch):
+    monkeypatch.delenv("KRD_BRANCH", raising=False)
+    c = Config(config_file=Path("/nonexistent/path.toml"))
+    assert c.get("krd_branch") is None
+
+
+def test_config_krd_branch_from_toml(tmp_path, monkeypatch):
+    monkeypatch.delenv("KRD_BRANCH", raising=False)
+    toml_file = tmp_path / ".onboard-config.toml"
+    toml_file.write_text('[paths]\nkrd_branch = "main"\n')
+    c = Config(config_file=toml_file)
+    assert c["krd_branch"] == "main"
+
+
+def test_config_krd_branch_empty_toml_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("KRD_BRANCH", raising=False)
+    toml_file = tmp_path / ".onboard-config.toml"
+    toml_file.write_text('[paths]\nkrd_branch = ""\n')
+    with pytest.raises(ValueError, match="krd_branch"):
+        Config(config_file=toml_file)
+
+
+def test_config_krd_branch_whitespace_toml_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("KRD_BRANCH", raising=False)
+    toml_file = tmp_path / ".onboard-config.toml"
+    toml_file.write_text('[paths]\nkrd_branch = "   "\n')
+    with pytest.raises(ValueError, match="krd_branch"):
+        Config(config_file=toml_file)
+
+
+def test_config_krd_branch_non_string_toml_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("KRD_BRANCH", raising=False)
+    toml_file = tmp_path / ".onboard-config.toml"
+    toml_file.write_text("[paths]\nkrd_branch = 123\n")
+    with pytest.raises(ValueError, match="krd_branch"):
+        Config(config_file=toml_file)
+
+
+def test_config_krd_branch_from_env(monkeypatch):
+    monkeypatch.setenv("KRD_BRANCH", "release-2.4")
+    c = Config(config_file=Path("/nonexistent/path.toml"))
+    assert c["krd_branch"] == "release-2.4"
+
+
+def test_config_krd_branch_empty_env_raises(monkeypatch):
+    monkeypatch.setenv("KRD_BRANCH", "")
+    with pytest.raises(ValueError, match="krd_branch"):
+        Config(config_file=Path("/nonexistent/path.toml"))
+
+
+def test_config_krd_branch_cli_overrides_env(monkeypatch):
+    monkeypatch.setenv("KRD_BRANCH", "release-2.4")
+    c = Config(
+        config_file=Path("/nonexistent/path.toml"),
+        cli_overrides={"krd_branch": "main"},
+    )
+    assert c["krd_branch"] == "main"
+
+
+def test_config_krd_branch_stays_string(tmp_path, monkeypatch):
+    monkeypatch.delenv("KRD_BRANCH", raising=False)
+    toml_file = tmp_path / ".onboard-config.toml"
+    toml_file.write_text('[paths]\nkrd_branch = "release-2.4"\n')
+    c = Config(config_file=toml_file)
+    assert isinstance(c.get("krd_branch"), str)
+
+
 # ---------------------------------------------------------------------------
 # to_yaml_filter
 # ---------------------------------------------------------------------------

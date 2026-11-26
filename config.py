@@ -30,6 +30,7 @@ class Config:
         CLUSTER: Target Kubernetes cluster name
         PIPELINERUN_TEMPLATE_DIR: Pipelinerun templates directory
         GITLAB_REPO_PATH: Base path for GitLab repository checkouts
+        KRD_BRANCH: Expected checked-out branch in the KRD repository
 
     Config File Format (.onboard-config.toml):
         [paths]
@@ -37,6 +38,7 @@ class Config:
         gitlab_repo_path = "./output/pipelinerun"
         krd_templates_dir = "./templates/KRD"
         pipelinerun_template_dir = "./templates/pipelinerun"
+        krd_branch = "rhoai-2.20"
 
         [cluster]
         name = "stone-prod-p02"
@@ -51,6 +53,7 @@ class Config:
         "gitlab_repo_path": Path("output/pipelinerun"),
         "pipelinerun_template_dir": Path("templates/pipelinerun"),
         "cluster": "stone-prod-p02",
+        "krd_branch": None,
         "repo_overrides": {},
     }
 
@@ -93,6 +96,11 @@ class Config:
         # 3. Override with CLI arguments (highest priority)
         config.update({k: v for k, v in cli_overrides.items() if v is not None})
 
+        # Validate merged krd_branch: when set, it must be a nonempty string
+        krd_branch = config.get("krd_branch")
+        if krd_branch is not None and (not isinstance(krd_branch, str) or not krd_branch.strip()):
+            raise ValueError(f"krd_branch must be a nonempty string when set (got {krd_branch!r})")
+
         # Convert all paths to resolved Path objects
         return self._resolve_paths(config)
 
@@ -123,6 +131,7 @@ class Config:
                 "gitlab_repo_path": data.get("paths", {}).get("gitlab_repo_path"),
                 "pipelinerun_template_dir": data.get("paths", {}).get("pipelinerun_template_dir"),
                 "cluster": data.get("cluster", {}).get("name"),
+                "krd_branch": data.get("paths", {}).get("krd_branch"),
             }
             if "repo_overrides" in data:
                 result["repo_overrides"] = {
@@ -159,6 +168,9 @@ class Config:
 
         if cluster := os.environ.get("CLUSTER"):
             env_config["cluster"] = cluster
+
+        if "KRD_BRANCH" in os.environ:
+            env_config["krd_branch"] = os.environ["KRD_BRANCH"]
 
         return env_config
 

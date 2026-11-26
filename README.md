@@ -140,6 +140,7 @@ Available arguments:
 - `--config-dir` - Directory containing multiple config YAML files
 - `--mode` - Generation mode: krd, pipelinerun, or both (default: both)
 - `--krd-path` - Output path for KRD resources
+- `--krd-branch` - Expected checked-out branch in the KRD repository; a mismatch aborts the run
 - `--gitlab-path` - Output path for pipelinerun resources
 - `--templates-dir` - KRD templates directory
 - `--pipelinerun-templates-dir` - Pipelinerun templates directory
@@ -167,6 +168,7 @@ name = "stone-prod-p02"
 **3. Environment Variables (Backward Compatible)**
 ```bash
 export KRD_PATH="/path/to/konflux-release-data/"
+export KRD_BRANCH="rhoai-2.20"
 export GITLAB_REPO_PATH="/path/to/gitlab-repos/"
 export CLUSTER="stone-prod-p02"
 export KRD_TEMPLATES_DIR="templates/KRD"
@@ -364,6 +366,53 @@ uv run python onboard-product.py --config "configs/*.yaml" --recreate  # Regener
 ```bash
 uv run python onboard-product.py --config "configs/*.yaml" --recreate --recreate-rpa
 ```
+
+### Multi-stream KRD updates
+
+When one product release spans several streams, give each stream its own worktree (or at least its own branch) and generate into that worktree only. Reusing a single checkout while switching branches is how files from one stream end up staged on another stream's branch.
+
+```bash
+# Run from the PMT checkout, with the KRD checkout at ../konflux-release-data.
+# git -C targets the KRD repository — without it, the worktrees would be
+# created for PMT instead. If the main KRD checkout is already on the branch,
+# git refuses to check it out in a second worktree: use that checkout directly
+# or switch it to another branch first.
+git -C ../konflux-release-data worktree add ../krd-rhoai-2.20 rhoai-2.20
+git -C ../konflux-release-data worktree add ../krd-rhoai-2.21 rhoai-2.21
+
+uv run python onboard-product.py \
+  --config configs/rhoai-2.20.yaml \
+  --mode krd \
+  --krd-path ../krd-rhoai-2.20 \
+  --krd-branch rhoai-2.20
+```
+
+Pass `--krd-branch` with the branch checked out in `--krd-path`. If the checkout is on a different branch (detached HEAD included), the run stops with an error before writing anything. The tool also warns when the KRD working tree has uncommitted changes, since those would otherwise be mixed into your commit.
+
+Repeat for each stream, then commit per stream inside that stream's worktree:
+
+```bash
+cd ../krd-rhoai-2.20
+git add tenants-config config
+git commit -m "Add rhoai-2.20 product resources"
+```
+
+Before pushing, confirm the commit contains only that stream's files:
+
+```bash
+git show --stat --name-only HEAD
+```
+
+Compare the file count against what you expect for the stream. If extra files show up, the commit already contains another stream's changes, and unstaging alone will not fix it. Undo the commit while keeping the files staged, drop the foreign files, recommit, and check again:
+
+```bash
+git reset --soft HEAD~1
+git restore --staged path/to/foreign/files
+git commit -m "Add rhoai-2.20 product resources"
+git show --stat --name-only HEAD
+```
+
+Non-interactive runs abort with exit code 1 when repository warnings appear, instead of continuing onto a questionable checkout. `--skip-repo-checks` bypasses branch, dirty-tree, and behind-remote checks; only use it where the checkout is managed by the caller (for example `scripts/drift-check.sh`, which resets the KRD repo between products).
 
 ## Configuration Schema
 
